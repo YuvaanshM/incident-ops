@@ -29,4 +29,3 @@ incorrectly suppress later legitimate notifications.
 Workers can scale horizontally without double-claiming live leases. Delivery
 remains explicitly at least once: a crash after Slack accepts a message but
 before the delivered update commits may produce a visible duplicate.
-

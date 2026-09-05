@@ -35,4 +35,3 @@ Concurrent requests serialize on database uniqueness and replay one stored
 response. A policy change to the retry cap requires an explicit migration and
 policy-version change. The demo can exercise automatic, pending, approved, and
 rejected outcomes without permitting a retry storm.
-

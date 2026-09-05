@@ -32,4 +32,3 @@ their lengths match.
 The schema supports OpenAI `text-embedding-3-small` and Google embedding models
 configured to return 1,536 dimensions. Provider changes require a controlled
 re-embedding operation but no vector-column migration.
-
