@@ -27,6 +27,10 @@ retrieval support.
     immutable events, explicit repositories/unit of work, auth/error adapters,
     database readiness, deterministic seeds, and the complete focused database
     suite.
+- `6059d75 fix: require scopes for principal-owned database rows`
+  - The completion audit tightened requester-owned action/idempotency policies
+    so identity matching never substitutes for an applicable scope; the focused
+    migration/RLS regression suite passed before the final delivery gate.
 
 ## Focused verification
 
