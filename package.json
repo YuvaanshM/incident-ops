@@ -1,0 +1,19 @@
+{
+  "name": "incident-ops",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=24.0.0 <25",
+    "pnpm": ">=11.25.0 <12"
+  },
+  "scripts": {
+    "dev:web": "corepack pnpm --filter @incident-ops/web dev",
+    "build": "corepack pnpm --filter @incident-ops/web build",
+    "lint": "corepack pnpm --filter @incident-ops/web lint",
+    "format:check": "corepack pnpm --filter @incident-ops/web format:check",
+    "typecheck": "corepack pnpm --filter @incident-ops/web typecheck",
+    "test": "corepack pnpm --filter @incident-ops/web test",
+    "test:e2e": "corepack pnpm --filter @incident-ops/web test:e2e"
+  }
+}

@@ -216,3 +216,28 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+CODEX_PLANNING_PROMPT.md
+PROJECT_SPEC.md
+IMPLEMENTATION_PLAN.md
+TESTING_RULES.md
+
+# Node.js / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+coverage/
+playwright-report/
+test-results/
+
+# Local environment files (the documented template is safe to commit)
+.env.local
+.env.*.local
+!.env.example
+
+# Local toolchains, caches, and database data
+.python/
+.cache/
+.pnpm-store/
+.postgres-data/
