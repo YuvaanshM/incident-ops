@@ -4,14 +4,14 @@ import pytest
 
 from incident_ops.application.auth import Principal, require_actor_type, require_scope
 from incident_ops.domain.enums import ActorType
-from incident_ops.domain.errors import AuthorizationDenied
+from incident_ops.domain.errors import AuthorizationDeniedError
 
 
 def test_principal_normalizes_scopes_and_checks_membership() -> None:
     principal = Principal(
         actor_type=ActorType.HUMAN,
         subject="operator-1",
-        scopes=frozenset({"incidents:read", "incidents:read", "incidents:write"}),
+        scopes=frozenset({" incidents:read ", "incidents:write"}),
     )
 
     assert principal.scopes == frozenset({"incidents:read", "incidents:write"})
@@ -31,7 +31,7 @@ def test_missing_scope_is_denied_without_disclosing_credentials() -> None:
         scopes=frozenset({"incidents:read"}),
     )
 
-    with pytest.raises(AuthorizationDenied, match="not authorized") as error:
+    with pytest.raises(AuthorizationDeniedError, match="not authorized") as error:
         require_scope(principal, "actions:approve")
 
     assert "agent-1" not in str(error.value)
@@ -45,5 +45,5 @@ def test_agent_cannot_satisfy_human_actor_requirement() -> None:
         scopes=frozenset({"actions:approve"}),
     )
 
-    with pytest.raises(AuthorizationDenied):
+    with pytest.raises(AuthorizationDeniedError):
         require_actor_type(principal, ActorType.HUMAN)

@@ -4,7 +4,7 @@ import pytest
 
 from incident_ops.domain.actions import get_action_definition
 from incident_ops.domain.enums import ActionType, ActorType, IncidentSeverity, PolicyDecision
-from incident_ops.domain.errors import UnsupportedAction
+from incident_ops.domain.errors import UnsupportedActionError
 from incident_ops.domain.policies import ActionPolicyInput, evaluate_action_policy
 
 
@@ -69,6 +69,5 @@ def test_status_update_is_never_automatically_applied() -> None:
 
 
 def test_action_registry_rejects_unknown_commands() -> None:
-    with pytest.raises(UnsupportedAction):
+    with pytest.raises(UnsupportedActionError):
         get_action_definition("run_shell_command")
-

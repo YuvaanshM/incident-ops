@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from incident_ops.domain.enums import IncidentStatus
-from incident_ops.domain.errors import InvalidStateTransition
+from incident_ops.domain.errors import InvalidStateTransitionError
 from incident_ops.domain.incidents import transition_lifecycle
 
 ALLOWED_TRANSITIONS = {
@@ -27,7 +27,7 @@ def test_state_machine_exhaustively_enforces_every_edge(
     existing_resolved_at = now - timedelta(hours=1) if current is IncidentStatus.RESOLVED else None
 
     if (current, target) not in ALLOWED_TRANSITIONS:
-        with pytest.raises(InvalidStateTransition):
+        with pytest.raises(InvalidStateTransitionError):
             transition_lifecycle(
                 current=current,
                 target=target,
@@ -66,4 +66,3 @@ def test_transition_requires_database_compatible_aware_time() -> None:
             resolved_at=None,
             closed_at=None,
         )
-
