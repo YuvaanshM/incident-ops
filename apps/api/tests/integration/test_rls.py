@@ -18,10 +18,16 @@ async def _ensure_runtime_role(database_engine: AsyncEngine) -> None:
                         CREATE ROLE incident_ops_phase2_runtime
                             NOLOGIN NOSUPERUSER NOBYPASSRLS;
                     END IF;
-                END $$;
-                GRANT USAGE ON SCHEMA public TO incident_ops_phase2_runtime;
+                END $$
+                """
+            )
+        )
+        await owner.execute(text("GRANT USAGE ON SCHEMA public TO incident_ops_phase2_runtime"))
+        await owner.execute(
+            text(
+                """
                 GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public
-                    TO incident_ops_phase2_runtime;
+                    TO incident_ops_phase2_runtime
                 """
             )
         )
@@ -54,7 +60,9 @@ async def test_unset_security_context_cannot_read_domain_rows(
         assert await connection.scalar(text("SELECT count(*) FROM incidents")) == 0
         await connection.execute(text("SELECT set_config('app.actor_type', 'human', true)"))
         await connection.execute(text("SELECT set_config('app.actor_id', 'operator-2', true)"))
-        await connection.execute(text("SELECT set_config('app.scopes', '[\"incidents:read\"]', true)"))
+        await connection.execute(
+            text("SELECT set_config('app.scopes', '[\"incidents:read\"]', true)")
+        )
         assert await connection.scalar(text("SELECT count(*) FROM incidents")) == 1
         await transaction.rollback()
 

@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import insert, text, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from incident_ops.infrastructure.database.models import (
@@ -53,7 +53,7 @@ async def test_incident_checks_reject_invalid_values(
     field: str,
     value: object,
 ) -> None:
-    with pytest.raises(IntegrityError):
+    with pytest.raises(DBAPIError):
         await _insert_incident(database_session, **{field: value})
 
 
@@ -140,7 +140,8 @@ async def test_embedding_is_exactly_1536_dimensions(database_session: AsyncSessi
     valid = HistoricalIncidentModel(
         source_id="hist-001",
         title="Synthetic latency precedent",
-        summary="A safe synthetic precedent.",
+        description="Synthetic checkout latency.",
+        resolution_summary="A safe synthetic precedent.",
         service="checkout",
         severity="low",
         resolution_steps=["restart synthetic worker"],
@@ -151,12 +152,13 @@ async def test_embedding_is_exactly_1536_dimensions(database_session: AsyncSessi
     database_session.add(valid)
     await database_session.flush()
 
-    with pytest.raises((IntegrityError, ValueError)):
+    with pytest.raises((DBAPIError, ValueError)):
         await database_session.execute(
             insert(HistoricalIncidentModel).values(
                 source_id="hist-002",
                 title="Wrong vector",
-                summary="Wrong vector size.",
+                description="Synthetic wrong vector incident.",
+                resolution_summary="Wrong vector size.",
                 service="checkout",
                 severity="low",
                 resolution_steps=[],

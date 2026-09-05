@@ -24,7 +24,12 @@ def postgres_test_url() -> str:
 
     configured_url = os.getenv("TEST_DATABASE_URL") or os.getenv("DATABASE_URL")
     if configured_url is None:
-        pytest.skip("TEST_DATABASE_URL or DATABASE_URL is required for integration tests")
+        configured_url = Settings().database_url.get_secret_value()  # type: ignore[call-arg]
+
+    url_prefix, database_part = configured_url.rsplit("/", maxsplit=1)
+    database_name, separator, query = database_part.partition("?")
+    if not database_name.endswith("_test"):
+        configured_url = f"{url_prefix}/{database_name}_test{separator}{query}"
 
     database_name = configured_url.rsplit("/", maxsplit=1)[-1].split("?", maxsplit=1)[0]
     if not database_name.endswith("_test"):

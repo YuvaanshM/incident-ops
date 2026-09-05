@@ -5,10 +5,11 @@ operators and narrowly scoped agents work from the same authoritative data. The
 backend decides whether a requested action is auto-applied, held for human
 approval, or rejected, and every meaningful change is auditable.
 
-Phase 1 contains the reproducible repository, API/web application shells,
-PostgreSQL service, security baseline, and quality gates. It intentionally does
-not yet contain incident tables, authentication flows, product screens, AI, or
-WebMCP behavior.
+Phases 1 and 2 contain the reproducible repository, API/web application shells,
+PostgreSQL/pgvector schema, pure domain and policy rules, persistence ports,
+RLS baseline, and quality gates. Product routes, human authentication provider
+selection, external notifications, AI calls, and WebMCP behavior remain in
+later phases.
 
 ## V1 boundaries
 
@@ -37,7 +38,8 @@ and audit behavior. PostgreSQL is authoritative.
 
 See [ADR-0001](docs/adr/0001-monorepo-and-runtimes.md),
 [ADR-0002](docs/adr/0002-backend-layering.md), and
-[the security model](docs/security-model.md).
+[the security model](docs/security-model.md). The complete Phase 2 schema and
+transaction rationale is in [the database foundation](docs/database.md).
 
 ## Prerequisites
 
@@ -59,6 +61,8 @@ corepack enable
 corepack install
 make bootstrap
 make dev-db
+make test-db
+make migrate
 ```
 
 Run the applications in separate terminals:
@@ -78,19 +82,24 @@ Then open `http://localhost:3000` and verify the API at
 |---|---|
 | `make bootstrap` | Install locked Python and Node dependencies |
 | `make dev-db` | Start pgvector/PostgreSQL on loopback port 5432 |
+| `make test-db` | Create the disposable sibling `incident_ops_test` database if needed |
 | `make dev-api` | Start FastAPI on loopback port 8000 |
 | `make dev-web` | Start Next.js on port 3000 |
+| `make migrate` | Upgrade the configured database to the latest Alembic revision |
+| `make migration-check` | Detect ORM/schema migration drift |
 | `make lint` | Run Ruff, ESLint, and formatting checks |
 | `make typecheck` | Run mypy and TypeScript checks |
 | `make test` | Run backend and frontend unit/API tests |
-| `make check` | Run the local delivery gate |
-| `make seed` | Add deterministic fixtures (none exist in Phase 1) |
+| `make test-integration` | Run real PostgreSQL migration, constraint, RLS, concurrency, and seed tests |
+| `make check` | Run the complete local delivery gate, including PostgreSQL integration |
+| `make seed` | Add deterministic synthetic Phase 2 fixtures |
 | `make down` | Stop local Compose services without deleting the volume |
 
-The PostgreSQL integration placeholder runs separately once the database is up:
+During development, run only the smallest relevant test file. The final Phase 2
+PostgreSQL gate is:
 
 ```bash
-uv run --project apps/api pytest apps/api/tests/integration
+make test-integration
 ```
 
 ## Configuration
@@ -105,18 +114,23 @@ loads are additive by default. A reset must be invoked explicitly with
 `--reset`, `APP_ENV=development`, and `ALLOW_DEVELOPMENT_RESET=true`; all other
 environments refuse it.
 
-The embedding dimension is deliberately absent from environment configuration.
-It determines a typed database column and remains the explicit D6 decision before
-Phase 2 migrations.
+The embedding dimension is deliberately absent from environment configuration:
+the migration fixes it at `vector(1536)`. Each historical record stores its
+embedding provider and exact model, and retrieval must filter to that pair so
+incompatible vector spaces are never mixed. Google `gemini-embedding-2` can be
+configured for 1,536 output dimensions; Gemini Flash is a separate optional
+answer-generation model. Free-tier external providers are permitted only for
+synthetic demo records.
 
 ## Test layers
 
-- Unit tests cover pure configuration and, in later phases, domain/policy rules.
+- Unit tests cover configuration, domain/policy rules, and application ports.
 - API tests cover transport contracts and security headers.
 - Integration tests use a real ephemeral PostgreSQL service.
 - Vitest/Testing Library cover the web adapter; Playwright covers the demo path.
 
-CI runs the same lint, type, unit, secret-scan, and database reachability checks.
+CI runs the same lint, type, unit, secret-scan, migration, constraint, RLS,
+concurrency, pgvector, and database integration checks.
 
 ## Safety boundary
 
@@ -135,8 +149,9 @@ not emitted in production.
 
 The final demo will create a low-severity incident, retrieve cited precedent,
 request a retry, show an auto-applied first attempt and human-gated second
-attempt, and surface a deliberate optimistic-concurrency conflict. Phase 1 stops
-at the secure application shell; this flow is implemented in later phases.
+attempt, and surface a deliberate optimistic-concurrency conflict. Phase 2
+provides the database and pure-domain foundation; this flow is implemented in
+later phases.
 
 ## Contributing
 
