@@ -543,6 +543,8 @@ def _enable_rls_and_policies() -> None:
                 incident_ops_has_scope('actions:read')
                 OR incident_ops_has_scope('actions:approve')
                 OR (
+                    incident_ops_has_scope('actions:request')
+                    AND
                     requested_by_type = incident_ops_actor_type()
                     AND requested_by_id = incident_ops_actor_id()
                 )
@@ -639,6 +641,12 @@ def _enable_rls_and_policies() -> None:
             USING (
                 principal_type = incident_ops_actor_type()
                 AND principal_id = incident_ops_actor_id()
+                AND (
+                    incident_ops_has_scope('incidents:write')
+                    OR incident_ops_has_scope('actions:request')
+                    OR incident_ops_has_scope('actions:approve')
+                    OR incident_ops_has_scope('actions:execute')
+                )
             )
         """,
         """
@@ -646,6 +654,12 @@ def _enable_rls_and_policies() -> None:
             WITH CHECK (
                 principal_type = incident_ops_actor_type()
                 AND principal_id = incident_ops_actor_id()
+                AND (
+                    incident_ops_has_scope('incidents:write')
+                    OR incident_ops_has_scope('actions:request')
+                    OR incident_ops_has_scope('actions:approve')
+                    OR incident_ops_has_scope('actions:execute')
+                )
             )
         """,
         """
@@ -653,10 +667,22 @@ def _enable_rls_and_policies() -> None:
             USING (
                 principal_type = incident_ops_actor_type()
                 AND principal_id = incident_ops_actor_id()
+                AND (
+                    incident_ops_has_scope('incidents:write')
+                    OR incident_ops_has_scope('actions:request')
+                    OR incident_ops_has_scope('actions:approve')
+                    OR incident_ops_has_scope('actions:execute')
+                )
             )
             WITH CHECK (
                 principal_type = incident_ops_actor_type()
                 AND principal_id = incident_ops_actor_id()
+                AND (
+                    incident_ops_has_scope('incidents:write')
+                    OR incident_ops_has_scope('actions:request')
+                    OR incident_ops_has_scope('actions:approve')
+                    OR incident_ops_has_scope('actions:execute')
+                )
             )
         """,
     )

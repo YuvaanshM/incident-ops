@@ -96,5 +96,9 @@ async def test_idempotency_records_are_isolated_by_verified_principal(
         await connection.execute(text("SELECT set_config('app.actor_id', 'operator-2', true)"))
         assert await connection.scalar(text("SELECT count(*) FROM idempotency_records")) == 0
         await connection.execute(text("SELECT set_config('app.actor_id', 'operator-1', true)"))
+        assert await connection.scalar(text("SELECT count(*) FROM idempotency_records")) == 0
+        await connection.execute(
+            text("SELECT set_config('app.scopes', '[\"incidents:write\"]', true)")
+        )
         assert await connection.scalar(text("SELECT count(*) FROM idempotency_records")) == 1
         await transaction.rollback()
