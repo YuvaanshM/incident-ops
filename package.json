@@ -10,9 +10,9 @@
   "scripts": {
     "dev:web": "corepack pnpm --filter @incident-ops/web dev",
     "build": "corepack pnpm --filter @incident-ops/web build",
-    "lint": "corepack pnpm --filter @incident-ops/web lint",
-    "format:check": "corepack pnpm --filter @incident-ops/web format:check",
-    "typecheck": "corepack pnpm --filter @incident-ops/web typecheck",
+    "lint": "corepack pnpm --filter @incident-ops/web lint && corepack pnpm --filter @incident-ops/api-client lint",
+    "format:check": "corepack pnpm --filter @incident-ops/web format:check && corepack pnpm --filter @incident-ops/api-client lint",
+    "typecheck": "corepack pnpm --filter @incident-ops/web typecheck && corepack pnpm --filter @incident-ops/api-client typecheck",
     "test": "corepack pnpm --filter @incident-ops/web test",
     "test:e2e": "corepack pnpm --filter @incident-ops/web test:e2e"
   }

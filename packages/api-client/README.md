@@ -1,4 +1,12 @@
 # API client
 
-Phase 3 generates transport-only TypeScript types and a client from FastAPI's
-OpenAPI document. Business rules do not belong in this package.
+This package contains transport-only TypeScript types generated from FastAPI's
+committed OpenAPI document and a thin `openapi-fetch` client. Business rules do
+not belong here.
+
+Regenerate after an API schema change:
+
+```bash
+make export-openapi
+corepack pnpm --filter @incident-ops/api-client generate
+```

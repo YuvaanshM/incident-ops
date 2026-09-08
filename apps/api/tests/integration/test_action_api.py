@@ -8,7 +8,7 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx2 import ASGITransport, AsyncClient, Response
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from incident_ops.application.auth import Principal
@@ -83,6 +83,18 @@ class ActionFailureObserver:
     async def reached(self, point: str) -> None:
         if point == "action.request.after_event":
             raise RuntimeError("synthetic private rollback detail")
+
+
+class IdempotentRequestOverlapObserver:
+    def __init__(self) -> None:
+        self.first_mutation_reached = asyncio.Event()
+        self.second_request_started = asyncio.Event()
+
+    async def reached(self, point: str) -> None:
+        if point != "action.request.after_event":
+            return
+        self.first_mutation_reached.set()
+        await asyncio.wait_for(self.second_request_started.wait(), timeout=5)
 
 
 @pytest.fixture
@@ -711,3 +723,136 @@ async def test_simultaneous_approve_and_reject_have_one_terminal_winner(
     assert persisted_status == winner.json()["status"]
     assert terminal_events == 1
     assert job_status == ("queued" if persisted_status == "applied" else "failed")
+
+
+@pytest.mark.integration
+async def test_concurrent_identical_action_requests_replay_one_execution(
+    action_settings: Settings,
+    database_engine: AsyncEngine,
+    clean_database: None,
+) -> None:
+    observer = IdempotentRequestOverlapObserver()
+    app = create_app(
+        action_settings,
+        token_verifier=ActionTokenVerifier(),
+        database_engine=database_engine,
+        command_observer=observer,
+    )
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as setup:
+        incident = await create_incident(setup)
+        incident_id = UUID(str(incident["id"]))
+        job_id = await add_failed_job(database_engine, incident_id)
+
+    key = uuid4()
+    async with (
+        AsyncClient(transport=transport, base_url="http://testserver") as first_client,
+        AsyncClient(transport=transport, base_url="http://testserver") as second_client,
+    ):
+        first_task = asyncio.create_task(request_retry(first_client, incident_id, job_id, key=key))
+        await asyncio.wait_for(observer.first_mutation_reached.wait(), timeout=5)
+
+        async def overlapping_request() -> Response:
+            observer.second_request_started.set()
+            return await request_retry(second_client, incident_id, job_id, key=key)
+
+        second_task = asyncio.create_task(overlapping_request())
+        first, second = await asyncio.wait_for(
+            asyncio.gather(first_task, second_task),
+            timeout=5,
+        )
+
+    assert first.status_code == second.status_code == 201
+    assert first.json() == second.json()
+    async with database_engine.connect() as connection:
+        action_count = await connection.scalar(select(func.count()).select_from(ActionRequestModel))
+        job = (
+            await connection.execute(
+                select(DemoJobModel.status, DemoJobModel.retry_count).where(
+                    DemoJobModel.id == job_id
+                )
+            )
+        ).one()
+    assert action_count == 1
+    assert job == ("queued", 1)
+
+
+@pytest.mark.integration
+async def test_approval_marks_changed_job_stale_and_read_missing_is_generic(
+    action_client: AsyncClient,
+    database_engine: AsyncEngine,
+    clean_database: None,
+) -> None:
+    incident = await create_incident(action_client, severity="high")
+    incident_id = UUID(str(incident["id"]))
+    job_id = await add_failed_job(database_engine, incident_id)
+    pending = await request_retry(action_client, incident_id, job_id)
+
+    async with database_engine.begin() as connection:
+        await connection.execute(
+            update(DemoJobModel)
+            .where(DemoJobModel.id == job_id)
+            .values(version=DemoJobModel.version + 1)
+        )
+
+    stale = await action_client.post(
+        f"/api/v1/actions/{pending.json()['id']}/approve",
+        headers=headers("human-token", key=uuid4()),
+    )
+    missing = await action_client.get(
+        f"/api/v1/actions/{uuid4()}",
+        headers=headers("reader-token"),
+    )
+
+    assert stale.status_code == 200
+    assert stale.json()["status"] == "stale"
+    assert stale.json()["outcome_code"] == "job_state_changed"
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "not_found"
+
+
+@pytest.mark.integration
+async def test_action_request_auth_and_idempotency_operation_namespaces(
+    action_client: AsyncClient,
+    database_engine: AsyncEngine,
+    clean_database: None,
+) -> None:
+    shared_key = uuid4()
+    created = await action_client.post(
+        "/api/v1/incidents",
+        headers=headers("human-token", key=shared_key),
+        json={
+            "title": "Operation namespace proof",
+            "description": "The same principal and key can address another operation.",
+            "service": "api",
+            "severity": "high",
+        },
+    )
+    incident_id = UUID(str(created.json()["id"]))
+    job_id = await add_failed_job(database_engine, incident_id)
+    body = {
+        "expected_incident_version": 1,
+        "action_type": "retry_failed_job",
+        "parameters": {"job_id": str(job_id)},
+    }
+
+    missing_auth = await action_client.post(
+        f"/api/v1/incidents/{incident_id}/actions",
+        headers={"Idempotency-Key": str(uuid4())},
+        json=body,
+    )
+    missing_scope = await action_client.post(
+        f"/api/v1/incidents/{incident_id}/actions",
+        headers=headers("reader-token", key=uuid4()),
+        json=body,
+    )
+    action = await action_client.post(
+        f"/api/v1/incidents/{incident_id}/actions",
+        headers=headers("human-token", key=shared_key),
+        json=body,
+    )
+
+    assert missing_auth.status_code == 401
+    assert missing_scope.status_code == 403
+    assert action.status_code == 201
+    assert action.json()["status"] == "pending"

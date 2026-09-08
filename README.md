@@ -5,11 +5,12 @@ operators and narrowly scoped agents work from the same authoritative data. The
 backend decides whether a requested action is auto-applied, held for human
 approval, or rejected, and every meaningful change is auditable.
 
-Phases 1 and 2 contain the reproducible repository, API/web application shells,
-PostgreSQL/pgvector schema, pure domain and policy rules, persistence ports,
-RLS baseline, and quality gates. Product routes, human authentication provider
-selection, external notifications, AI calls, and WebMCP behavior remain in
-later phases.
+Phases 1 through 3 contain the reproducible repository, PostgreSQL/pgvector
+foundation, and the complete FastAPI human/product API. Incident commands,
+action policy, approvals, audit history, idempotency, concurrency control, and
+the narrow demo retry executor work against PostgreSQL. The human web product,
+production authentication provider, external delivery, retrieval calls, and
+agent adapters remain in later phases.
 
 ## V1 boundaries
 
@@ -76,6 +77,11 @@ Then open `http://localhost:3000` and verify the API at
 `http://localhost:8000/health/live`. Interactive API docs are available at
 `http://localhost:8000/docs` outside production.
 
+For the local Swagger walkthrough, enable `DEVELOPMENT_AUTH_ENABLED=true` only
+in the ignored `.env`, then use the public fixture credential `human-demo` or
+`agent-demo` in Swagger's Authorize dialog. See the
+[Phase 3 API walkthrough](docs/phase-3-api.md).
+
 ## Commands
 
 | Command | Purpose |
@@ -87,6 +93,9 @@ Then open `http://localhost:3000` and verify the API at
 | `make dev-web` | Start Next.js on port 3000 |
 | `make migrate` | Upgrade the configured database to the latest Alembic revision |
 | `make migration-check` | Detect ORM/schema migration drift |
+| `make export-openapi` | Deterministically export FastAPI's committed OpenAPI document |
+| `make generate-api-client` | Regenerate the transport-only TypeScript API client |
+| `make api-client-check` | Fail when OpenAPI or generated client artifacts drift |
 | `make lint` | Run Ruff, ESLint, and formatting checks |
 | `make typecheck` | Run mypy and TypeScript checks |
 | `make test` | Run backend and frontend unit/API tests |
@@ -95,7 +104,7 @@ Then open `http://localhost:3000` and verify the API at
 | `make seed` | Add deterministic synthetic Phase 2 fixtures |
 | `make down` | Stop local Compose services without deleting the volume |
 
-During development, run only the smallest relevant test file. The final Phase 2
+During development, run only the smallest relevant test file. The final
 PostgreSQL gate is:
 
 ```bash
@@ -147,11 +156,11 @@ not emitted in production.
 
 ## Demo flow
 
-The final demo will create a low-severity incident, retrieve cited precedent,
-request a retry, show an auto-applied first attempt and human-gated second
-attempt, and surface a deliberate optimistic-concurrency conflict. Phase 2
-provides the database and pure-domain foundation; this flow is implemented in
-later phases.
+Phase 3 implements the non-UI control-plane flow: create/read incidents, request
+a retry, auto-apply the first safe attempt, deterministically fail the demo job
+again, hold the second attempt for a human, approve/reject it, inspect the
+timeline, and surface stale optimistic-concurrency conflicts. Cited historical
+retrieval and the browser experience arrive in later phases.
 
 ## Contributing
 

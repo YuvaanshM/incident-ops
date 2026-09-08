@@ -24,8 +24,8 @@ delete operation.
 ## Concurrency and transaction model
 
 The default isolation level remains PostgreSQL `READ COMMITTED`. Incident writes
-use a conditional `WHERE id = ... AND version = ...` update. Approval code will
-lock a still-pending action with `FOR UPDATE` and revalidate it in the same
+use a conditional `WHERE id = ... AND version = ...` update. Approval code
+locks a still-pending action with `FOR UPDATE` and revalidates it in the same
 transaction. Idempotency uniqueness serializes concurrent duplicate commands.
 Outbox workers will claim independent rows with `FOR UPDATE SKIP LOCKED`; a live
 lease prevents double-claiming and an expired lease is reclaimable.

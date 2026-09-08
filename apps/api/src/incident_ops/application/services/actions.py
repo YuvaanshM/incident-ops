@@ -38,7 +38,8 @@ from incident_ops.domain.incidents import transition_lifecycle
 from incident_ops.domain.policies import ActionPolicyInput, evaluate_action_policy
 from incident_ops.infrastructure.database.unit_of_work import SqlAlchemyUnitOfWork
 
-_ACTION_INTERNAL_SCOPES = frozenset({"incidents:read", "incidents:write", "actions:execute"})
+_REQUEST_INTERNAL_SCOPES = frozenset({"incidents:read", "actions:execute"})
+_REVIEW_INTERNAL_SCOPES = frozenset({"incidents:read", "incidents:write", "actions:execute"})
 _DEMO_INTERNAL_SCOPES = frozenset({"incidents:read", "actions:execute"})
 
 
@@ -114,7 +115,6 @@ class ActionCommandService:
         parameters: Mapping[str, object],
         rationale: str | None,
     ) -> CommandResult:
-        definition = get_action_definition(action_type)
         fingerprint = canonical_request_fingerprint(
             operation="actions.request",
             path_parameters={"incident_id": incident_id},
@@ -128,7 +128,7 @@ class ActionCommandService:
         async with SqlAlchemyUnitOfWork(
             self._engine,
             principal=principal,
-            trusted_scopes=_ACTION_INTERNAL_SCOPES,
+            trusted_scopes=_REQUEST_INTERNAL_SCOPES,
         ) as uow:
             reservation = await uow.idempotency.reserve(
                 principal=principal,
@@ -140,6 +140,11 @@ class ActionCommandService:
             if replay is not None:
                 await uow.rollback()
                 return replay
+
+            try:
+                definition = get_action_definition(action_type)
+            except IncidentOpsError as error:
+                return await self._complete_error(uow, reservation, error)
 
             incident = await uow.incidents.get(incident_id, for_update=True)
             if incident is None:
@@ -272,7 +277,7 @@ class ActionCommandService:
                 decided_by_id=decided_by_id,
                 decided_at=decided_at,
             )
-            requested_event = await uow.events.append(
+            await uow.events.append(
                 incident_id=incident_id,
                 action_request_id=action.id,
                 event_type="action.requested",
@@ -324,8 +329,6 @@ class ActionCommandService:
                         "execution_mode": action.execution_mode,
                     },
                 )
-            del requested_event
-
             body = action_body(action)
             await uow.idempotency.complete(
                 record_id=reservation.record_id,
@@ -393,7 +396,7 @@ class ActionCommandService:
         async with SqlAlchemyUnitOfWork(
             self._engine,
             principal=principal,
-            trusted_scopes=_ACTION_INTERNAL_SCOPES,
+            trusted_scopes=_REVIEW_INTERNAL_SCOPES,
         ) as uow:
             reservation = await uow.idempotency.reserve(
                 principal=principal,

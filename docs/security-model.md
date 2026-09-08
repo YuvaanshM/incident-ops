@@ -52,7 +52,7 @@ in local Compose.
 
 ## Abuse and dependencies
 
-APIs will use principal-aware rate limits, with tighter budgets for agents and
+APIs use principal-aware rate limits, with tighter budgets for agents and
 expensive work. Forwarded IP headers are trusted only behind a configured proxy.
 Lockfiles are committed, CI scans for leaked secrets, and dependency updates are
 tracked automatically. Production secrets live in the deployment secret manager.
@@ -60,8 +60,8 @@ tracked automatically. Production secrets live in the deployment secret manager.
 ## Phase gates
 
 Phase 1 establishes these rules and secure defaults but does not pretend to
-implement later controls. Phase 2 must add parameterized persistence and tested
-RLS. Phase 3 must add verified auth dependencies, scope/actor checks, strict API
+implement later controls. Phase 2 added parameterized persistence and tested
+RLS. Phase 3 adds verified auth dependencies, scope/actor checks, strict API
 schemas, idempotency, rate limiting, and authorization tests. Phase 4 must add the
 chosen human OIDC flow and CSRF handling. Phase 7 may add only the narrow agent
 tools in the specification.
