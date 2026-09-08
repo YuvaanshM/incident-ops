@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, AsyncSessionTransa
 from incident_ops.application.auth import Principal
 from incident_ops.infrastructure.database.repositories import (
     SqlAlchemyActionRequestRepository,
+    SqlAlchemyDemoJobRepository,
     SqlAlchemyEventRepository,
     SqlAlchemyIdempotencyRepository,
     SqlAlchemyIncidentRepository,
@@ -19,15 +20,23 @@ from incident_ops.infrastructure.database.session import (
 
 
 class SqlAlchemyUnitOfWork:
-    def __init__(self, engine: AsyncEngine, *, principal: Principal | None = None) -> None:
+    def __init__(
+        self,
+        engine: AsyncEngine,
+        *,
+        principal: Principal | None = None,
+        trusted_scopes: frozenset[str] = frozenset(),
+    ) -> None:
         self._session_factory = create_session_factory(engine)
         self._principal = principal
+        self._trusted_scopes = trusted_scopes
         self.session: AsyncSession = self._session_factory()
         self._transaction: AsyncSessionTransaction | None = None
         self._finalized = False
 
         self.incidents = SqlAlchemyIncidentRepository(self.session)
         self.actions = SqlAlchemyActionRequestRepository(self.session)
+        self.jobs = SqlAlchemyDemoJobRepository(self.session)
         self.idempotency = SqlAlchemyIdempotencyRepository(self.session)
         self.events = SqlAlchemyEventRepository(self.session)
         self.outbox = SqlAlchemyOutboxRepository(self.session)
@@ -35,7 +44,12 @@ class SqlAlchemyUnitOfWork:
     async def __aenter__(self) -> SqlAlchemyUnitOfWork:
         self._transaction = await self.session.begin()
         if self._principal is not None:
-            await apply_principal_context(self.session, self._principal)
+            database_principal = Principal(
+                actor_type=self._principal.actor_type,
+                subject=self._principal.subject,
+                scopes=self._principal.scopes | self._trusted_scopes,
+            )
+            await apply_principal_context(self.session, database_principal)
         return self
 
     async def commit(self) -> None:

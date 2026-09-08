@@ -22,7 +22,7 @@ class InvalidStateTransitionError(IncidentOpsError):
 
 
 class UnsupportedActionError(IncidentOpsError):
-    code = "unsupported_action"
+    code = "unsupported_action_type"
     public_message = "The requested action is not supported."
     status_code = 422
 

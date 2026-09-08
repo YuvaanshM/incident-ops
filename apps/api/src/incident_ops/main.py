@@ -17,12 +17,16 @@ from incident_ops.api.errors import (
     internal_error_handler,
     validation_error_handler,
 )
+from incident_ops.api.routers.actions import demo_router
+from incident_ops.api.routers.actions import router as actions_router
 from incident_ops.api.routers.health import router as health_router
 from incident_ops.api.routers.incidents import router as incidents_router
 from incident_ops.application.ports import CommandObserver, RateLimiter, TokenVerifier
+from incident_ops.application.services.actions import ActionCommandService, ActionQueryService
 from incident_ops.application.services.incidents import IncidentCommandService, IncidentQueryService
 from incident_ops.config import Settings, get_settings
 from incident_ops.domain.errors import IncidentOpsError
+from incident_ops.infrastructure.auth.development import DevelopmentTokenVerifier
 from incident_ops.infrastructure.database.session import create_database_engine, probe_database
 from incident_ops.infrastructure.rate_limit import FixedWindowRateLimiter
 
@@ -43,6 +47,12 @@ def create_app(
 
     resolved_settings = settings or get_settings()
     is_production = resolved_settings.app_env == "production"
+    if (
+        token_verifier is None
+        and resolved_settings.app_env == "development"
+        and resolved_settings.development_auth_enabled
+    ):
+        token_verifier = DevelopmentTokenVerifier()
     owns_database_engine = database_engine is None
     resolved_probe = readiness_probe
     if database_engine is None:
@@ -76,6 +86,11 @@ def create_app(
     application.state.rate_limiter = rate_limiter or FixedWindowRateLimiter()
     application.state.incident_query_service = IncidentQueryService(database_engine)
     application.state.incident_command_service = IncidentCommandService(
+        database_engine,
+        observer=command_observer,
+    )
+    application.state.action_query_service = ActionQueryService(database_engine)
+    application.state.action_command_service = ActionCommandService(
         database_engine,
         observer=command_observer,
     )
@@ -132,4 +147,7 @@ def create_app(
 
     application.include_router(health_router)
     application.include_router(incidents_router)
+    application.include_router(actions_router)
+    if not is_production:
+        application.include_router(demo_router)
     return application

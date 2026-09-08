@@ -168,3 +168,45 @@ def test_request_log_contains_correlation_not_bearer_token(
     assert record.request_id == response.headers["x-request-id"]
     assert record.path == "/test/protected"
     assert "valid-test-token" not in caplog.text
+
+
+def test_explicit_development_auth_supports_local_swagger_without_real_secrets(
+    test_settings: Settings,
+) -> None:
+    development_settings = Settings(
+        _env_file=None,
+        app_env="development",
+        database_url=test_settings.database_url,
+        development_auth_enabled=True,
+        cors_origins=["http://localhost:3000"],
+        allowed_hosts=["testserver"],
+    )
+    app = create_app(development_settings)
+
+    async def protected(
+        principal: Annotated[Principal, Depends(get_current_principal)],
+    ) -> dict[str, str]:
+        return {
+            "actor_type": principal.actor_type.value,
+            "subject": principal.subject,
+        }
+
+    app.add_api_route("/test/development-auth", protected, methods=["GET"])
+    client = TestClient(app)
+
+    human = client.get(
+        "/test/development-auth",
+        headers={"Authorization": "Bearer human-demo"},
+    )
+    agent = client.get(
+        "/test/development-auth",
+        headers={"Authorization": "Bearer agent-demo"},
+    )
+    unknown = client.get(
+        "/test/development-auth",
+        headers={"Authorization": "Bearer not-a-demo-credential"},
+    )
+
+    assert human.json() == {"actor_type": "human", "subject": "local-human"}
+    assert agent.json() == {"actor_type": "agent", "subject": "local-agent"}
+    assert unknown.status_code == 401

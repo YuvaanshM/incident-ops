@@ -3,7 +3,12 @@
 from dataclasses import asdict
 from typing import Any
 
-from incident_ops.application.dto import DemoJobView, IncidentEventView, IncidentView
+from incident_ops.application.dto import (
+    ActionRequestView,
+    DemoJobView,
+    IncidentEventView,
+    IncidentView,
+)
 from incident_ops.application.idempotency import json_ready
 from incident_ops.domain.errors import IncidentOpsError
 
@@ -20,6 +25,10 @@ def incident_body(incident: IncidentView) -> dict[str, Any]:
 
 def event_body(event: IncidentEventView) -> dict[str, Any]:
     return json_ready(asdict(event))
+
+
+def action_body(action: ActionRequestView) -> dict[str, Any]:
+    return json_ready(asdict(action))
 
 
 def error_body(error: IncidentOpsError) -> dict[str, Any]:

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from incident_ops.application.auth import Principal
 from incident_ops.application.dto import (
+    ActionRequestView,
     DemoJobView,
     IdempotencyReservation,
     IncidentEventView,
@@ -75,6 +76,31 @@ def _event_view(model: IncidentEventModel) -> IncidentEventView:
         request_id=model.request_id,
         payload=dict(model.payload),
         occurred_at=model.occurred_at,
+    )
+
+
+def _action_view(model: ActionRequestModel) -> ActionRequestView:
+    return ActionRequestView(
+        id=model.id,
+        incident_id=model.incident_id,
+        action_type=model.action_type,
+        status=model.status,
+        execution_mode=model.execution_mode,
+        requested_by_type=model.requested_by_type,
+        requested_by_id=model.requested_by_id,
+        idempotency_key=model.idempotency_key,
+        base_incident_version=model.base_incident_version,
+        parameters=dict(model.parameters),
+        policy_version=model.policy_version,
+        policy_snapshot=dict(model.policy_snapshot),
+        rationale=model.rationale,
+        outcome_code=model.outcome_code,
+        outcome_payload=(None if model.outcome_payload is None else dict(model.outcome_payload)),
+        decided_by_type=model.decided_by_type,
+        decided_by_id=model.decided_by_id,
+        decided_at=model.decided_at,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
     )
 
 
@@ -233,7 +259,89 @@ class SqlAlchemyActionRequestRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def lock_pending(self, action_id: UUID) -> ActionRequestModel | None:
+    async def add_action(
+        self,
+        *,
+        incident_id: UUID,
+        action_type: str,
+        status: str,
+        execution_mode: str,
+        principal: Principal,
+        idempotency_key: UUID,
+        request_fingerprint: str,
+        base_incident_version: int,
+        parameters: Mapping[str, object],
+        policy_version: str,
+        policy_snapshot: Mapping[str, object],
+        rationale: str | None,
+        outcome_code: str | None,
+        outcome_payload: Mapping[str, object] | None,
+        decided_by_type: str | None,
+        decided_by_id: str | None,
+        decided_at: datetime | None,
+    ) -> ActionRequestView:
+        model = ActionRequestModel(
+            incident_id=incident_id,
+            action_type=action_type,
+            status=status,
+            execution_mode=execution_mode,
+            requested_by_type=principal.actor_type.value,
+            requested_by_id=principal.subject,
+            idempotency_key=idempotency_key,
+            request_fingerprint=request_fingerprint,
+            base_incident_version=base_incident_version,
+            parameters=dict(parameters),
+            policy_version=policy_version,
+            policy_snapshot=dict(policy_snapshot),
+            rationale=rationale,
+            outcome_code=outcome_code,
+            outcome_payload=None if outcome_payload is None else dict(outcome_payload),
+            decided_by_type=decided_by_type,
+            decided_by_id=decided_by_id,
+            decided_at=decided_at,
+        )
+        self._session.add(model)
+        await self._session.flush()
+        await self._session.refresh(model)
+        return _action_view(model)
+
+    async def get(self, action_id: UUID) -> ActionRequestView | None:
+        model = await self._session.scalar(
+            select(ActionRequestModel).where(ActionRequestModel.id == action_id)
+        )
+        return None if model is None else _action_view(model)
+
+    async def list_page(
+        self,
+        *,
+        status: str | None,
+        cursor_timestamp: datetime | None,
+        cursor_id: UUID | None,
+        limit: int,
+    ) -> tuple[ActionRequestView, ...]:
+        statement = select(ActionRequestModel)
+        if status is not None:
+            statement = statement.where(ActionRequestModel.status == status)
+        if cursor_timestamp is not None and cursor_id is not None:
+            statement = statement.where(
+                or_(
+                    ActionRequestModel.created_at < cursor_timestamp,
+                    and_(
+                        ActionRequestModel.created_at == cursor_timestamp,
+                        ActionRequestModel.id < cursor_id,
+                    ),
+                )
+            )
+        models = (
+            await self._session.scalars(
+                statement.order_by(
+                    ActionRequestModel.created_at.desc(), ActionRequestModel.id.desc()
+                ).limit(limit)
+            )
+        ).all()
+        return tuple(_action_view(model) for model in models)
+
+    async def lock_pending(self, action_id: UUID) -> ActionRequestView | None:
         statement = (
             select(ActionRequestModel)
             .where(
@@ -242,7 +350,116 @@ class SqlAlchemyActionRequestRepository:
             )
             .with_for_update()
         )
-        return await self._session.scalar(statement)
+        model = await self._session.scalar(statement)
+        return None if model is None else _action_view(model)
+
+    async def finalize(
+        self,
+        *,
+        action_id: UUID,
+        status: str,
+        outcome_code: str,
+        outcome_payload: Mapping[str, object],
+        principal: Principal,
+    ) -> ActionRequestView | None:
+        result = await self._session.execute(
+            update(ActionRequestModel)
+            .where(
+                ActionRequestModel.id == action_id,
+                ActionRequestModel.status == "pending",
+            )
+            .values(
+                status=status,
+                outcome_code=outcome_code,
+                outcome_payload=dict(outcome_payload),
+                decided_by_type=principal.actor_type.value,
+                decided_by_id=principal.subject,
+                decided_at=func.clock_timestamp(),
+                updated_at=func.clock_timestamp(),
+            )
+            .returning(ActionRequestModel)
+        )
+        model = result.scalar_one_or_none()
+        return None if model is None else _action_view(model)
+
+
+class SqlAlchemyDemoJobRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get(self, job_id: UUID, *, for_update: bool = False) -> DemoJobView | None:
+        statement = select(DemoJobModel).where(DemoJobModel.id == job_id)
+        if for_update:
+            statement = statement.with_for_update()
+        model = await self._session.scalar(statement)
+        return None if model is None else _job_view(model)
+
+    async def queue_failed(
+        self,
+        *,
+        job_id: UUID,
+        incident_id: UUID,
+        expected_version: int,
+        expected_retry_count: int,
+    ) -> DemoJobView | None:
+        result = await self._session.execute(
+            update(DemoJobModel)
+            .where(
+                DemoJobModel.id == job_id,
+                DemoJobModel.incident_id == incident_id,
+                DemoJobModel.status == "failed",
+                DemoJobModel.version == expected_version,
+                DemoJobModel.retry_count == expected_retry_count,
+                DemoJobModel.retry_count < 2,
+            )
+            .values(
+                status="queued",
+                retry_count=DemoJobModel.retry_count + 1,
+                version=DemoJobModel.version + 1,
+                last_error=None,
+                updated_at=func.clock_timestamp(),
+            )
+            .returning(DemoJobModel)
+        )
+        model = result.scalar_one_or_none()
+        return None if model is None else _job_view(model)
+
+    async def simulate_failure(self, *, job_id: UUID) -> DemoJobView | None:
+        running_result = await self._session.execute(
+            update(DemoJobModel)
+            .where(
+                DemoJobModel.id == job_id,
+                DemoJobModel.status == "queued",
+            )
+            .values(
+                status="running",
+                version=DemoJobModel.version + 1,
+                updated_at=func.clock_timestamp(),
+            )
+            .returning(DemoJobModel.version)
+        )
+        running_version = running_result.scalar_one_or_none()
+        if running_version is None:
+            return None
+        failed_result = await self._session.execute(
+            update(DemoJobModel)
+            .where(
+                DemoJobModel.id == job_id,
+                DemoJobModel.status == "running",
+                DemoJobModel.version == running_version,
+            )
+            .values(
+                status="failed",
+                version=DemoJobModel.version + 1,
+                last_error="Synthetic demo failure after retry.",
+                updated_at=func.clock_timestamp(),
+            )
+            .returning(DemoJobModel)
+        )
+        model = failed_result.scalar_one_or_none()
+        if model is None:
+            raise RuntimeError("demo job transition lost its transaction-local update")
+        return _job_view(model)
 
 
 class SqlAlchemyIdempotencyRepository:

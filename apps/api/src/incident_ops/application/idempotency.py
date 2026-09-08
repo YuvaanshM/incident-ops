@@ -13,7 +13,7 @@ def _json_default(value: object) -> str:
     if isinstance(value, UUID):
         return str(value)
     if isinstance(value, datetime):
-        return value.isoformat()
+        return value.isoformat().replace("+00:00", "Z")
     if isinstance(value, Enum):
         return str(value.value)
     raise TypeError(f"unsupported canonical JSON value: {type(value).__name__}")

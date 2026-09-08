@@ -7,6 +7,8 @@ from uuid import UUID
 
 from incident_ops.application.auth import Principal
 from incident_ops.application.dto import (
+    ActionRequestView,
+    DemoJobView,
     IdempotencyReservation,
     IncidentEventView,
     IncidentView,
@@ -78,7 +80,65 @@ class IncidentRepository(Protocol):
 
 
 class ActionRequestRepository(Protocol):
-    async def lock_pending(self, action_id: UUID) -> object | None: ...
+    async def add_action(
+        self,
+        *,
+        incident_id: UUID,
+        action_type: str,
+        status: str,
+        execution_mode: str,
+        principal: Principal,
+        idempotency_key: UUID,
+        request_fingerprint: str,
+        base_incident_version: int,
+        parameters: Mapping[str, object],
+        policy_version: str,
+        policy_snapshot: Mapping[str, object],
+        rationale: str | None,
+        outcome_code: str | None,
+        outcome_payload: Mapping[str, object] | None,
+        decided_by_type: str | None,
+        decided_by_id: str | None,
+        decided_at: datetime | None,
+    ) -> ActionRequestView: ...
+
+    async def get(self, action_id: UUID) -> ActionRequestView | None: ...
+
+    async def list_page(
+        self,
+        *,
+        status: str | None,
+        cursor_timestamp: datetime | None,
+        cursor_id: UUID | None,
+        limit: int,
+    ) -> tuple[ActionRequestView, ...]: ...
+
+    async def lock_pending(self, action_id: UUID) -> ActionRequestView | None: ...
+
+    async def finalize(
+        self,
+        *,
+        action_id: UUID,
+        status: str,
+        outcome_code: str,
+        outcome_payload: Mapping[str, object],
+        principal: Principal,
+    ) -> ActionRequestView | None: ...
+
+
+class DemoJobRepository(Protocol):
+    async def get(self, job_id: UUID, *, for_update: bool = False) -> DemoJobView | None: ...
+
+    async def queue_failed(
+        self,
+        *,
+        job_id: UUID,
+        incident_id: UUID,
+        expected_version: int,
+        expected_retry_count: int,
+    ) -> DemoJobView | None: ...
+
+    async def simulate_failure(self, *, job_id: UUID) -> DemoJobView | None: ...
 
 
 class IdempotencyRepository(Protocol):
@@ -140,6 +200,7 @@ class OutboxRepository(Protocol):
 class UnitOfWork(Protocol):
     incidents: IncidentRepository
     actions: ActionRequestRepository
+    jobs: DemoJobRepository
     idempotency: IdempotencyRepository
     events: EventRepository
     outbox: OutboxRepository

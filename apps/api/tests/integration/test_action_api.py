@@ -20,6 +20,7 @@ from incident_ops.infrastructure.database.models import (
     DemoJobModel,
     IdempotencyRecordModel,
     IncidentEventModel,
+    IncidentModel,
     OutboxEventModel,
 )
 from incident_ops.main import create_app
@@ -230,9 +231,7 @@ async def test_low_severity_first_retry_auto_applies_atomically_and_replays(
                 )
             )
         ).one()
-        action_count = await connection.scalar(
-            select(func.count()).select_from(ActionRequestModel)
-        )
+        action_count = await connection.scalar(select(func.count()).select_from(ActionRequestModel))
         action_events = await connection.scalar(
             select(func.count())
             .select_from(IncidentEventModel)
@@ -576,6 +575,139 @@ async def test_approval_auth_simulator_scope_and_action_rollback_boundaries(
 
     async with database_engine.connect() as connection:
         for model in (ActionRequestModel, IncidentEventModel, IdempotencyRecordModel):
-            assert await connection.scalar(select(func.count()).select_from(model)) == before[
-                model.__tablename__
-            ]
+            assert (
+                await connection.scalar(select(func.count()).select_from(model))
+                == before[model.__tablename__]
+            )
+
+
+@pytest.mark.integration
+async def test_retry_rejects_missing_foreign_nonfailed_jobs_and_stale_incident_versions(
+    action_client: AsyncClient,
+    database_engine: AsyncEngine,
+    clean_database: None,
+) -> None:
+    first_incident = await create_incident(action_client)
+    second_incident = await create_incident(action_client)
+    first_id = UUID(str(first_incident["id"]))
+    second_id = UUID(str(second_incident["id"]))
+    foreign_job = await add_failed_job(database_engine, second_id)
+    running_job = await add_failed_job(database_engine, first_id, status="running")
+
+    missing = await request_retry(action_client, first_id, uuid4())
+    foreign = await request_retry(action_client, first_id, foreign_job)
+    nonfailed = await request_retry(action_client, first_id, running_job)
+    stale_version = await request_retry(
+        action_client,
+        first_id,
+        running_job,
+        expected_version=99,
+    )
+
+    for denied in (missing, foreign, nonfailed):
+        assert denied.status_code == 422
+        assert denied.json()["error"]["code"] == "invalid_action_parameters"
+    assert stale_version.status_code == 409
+    assert stale_version.json()["error"]["code"] == "version_conflict"
+
+    async with database_engine.connect() as connection:
+        assert await connection.scalar(select(func.count()).select_from(ActionRequestModel)) == 0
+
+
+@pytest.mark.integration
+async def test_status_update_approval_applies_the_existing_incident_transition(
+    action_client: AsyncClient,
+    database_engine: AsyncEngine,
+    clean_database: None,
+) -> None:
+    incident = await create_incident(action_client)
+    incident_id = UUID(str(incident["id"]))
+    requested = await action_client.post(
+        f"/api/v1/incidents/{incident_id}/actions",
+        headers=headers("agent-token", key=uuid4()),
+        json={
+            "expected_incident_version": 1,
+            "action_type": "request_status_update",
+            "parameters": {"target_status": "investigating"},
+        },
+    )
+    approved = await action_client.post(
+        f"/api/v1/actions/{requested.json()['id']}/approve",
+        headers=headers("human-token", key=uuid4()),
+    )
+
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "applied"
+    assert approved.json()["outcome_code"] == "incident_status_updated"
+    async with database_engine.connect() as connection:
+        persisted = (
+            await connection.execute(
+                select(IncidentModel.status, IncidentModel.version).where(
+                    IncidentModel.id == incident_id
+                )
+            )
+        ).one()
+    assert persisted == ("investigating", 2)
+
+
+@pytest.mark.integration
+async def test_simultaneous_approve_and_reject_have_one_terminal_winner(
+    action_settings: Settings,
+    database_engine: AsyncEngine,
+    clean_database: None,
+) -> None:
+    app = create_app(
+        action_settings,
+        token_verifier=ActionTokenVerifier(),
+        database_engine=database_engine,
+        command_observer=ApprovalBarrierObserver(),
+    )
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as setup:
+        incident = await create_incident(setup, severity="high")
+        incident_id = UUID(str(incident["id"]))
+        job_id = await add_failed_job(database_engine, incident_id)
+        pending = await request_retry(setup, incident_id, job_id)
+        action_id = UUID(str(pending.json()["id"]))
+
+    async with (
+        AsyncClient(transport=transport, base_url="http://testserver") as approve_client,
+        AsyncClient(transport=transport, base_url="http://testserver") as reject_client,
+    ):
+        approve_task = asyncio.create_task(
+            approve_client.post(
+                f"/api/v1/actions/{action_id}/approve",
+                headers=headers("human-token", key=uuid4()),
+            )
+        )
+        reject_task = asyncio.create_task(
+            reject_client.post(
+                f"/api/v1/actions/{action_id}/reject",
+                headers=headers("human-token", key=uuid4()),
+                json={"reason": "Reject the competing review."},
+            )
+        )
+        responses = await asyncio.gather(approve_task, reject_task)
+
+    assert sorted(response.status_code for response in responses) == [200, 409]
+    winner = next(response for response in responses if response.status_code == 200)
+    assert winner.json()["status"] in {"applied", "rejected"}
+
+    async with database_engine.connect() as connection:
+        persisted_status = await connection.scalar(
+            select(ActionRequestModel.status).where(ActionRequestModel.id == action_id)
+        )
+        terminal_events = await connection.scalar(
+            select(func.count())
+            .select_from(IncidentEventModel)
+            .where(
+                IncidentEventModel.action_request_id == action_id,
+                IncidentEventModel.event_type.in_(("action.applied", "action.rejected")),
+            )
+        )
+        job_status = await connection.scalar(
+            select(DemoJobModel.status).where(DemoJobModel.id == job_id)
+        )
+    assert persisted_status == winner.json()["status"]
+    assert terminal_events == 1
+    assert job_status == ("queued" if persisted_status == "applied" else "failed")

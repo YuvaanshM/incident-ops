@@ -52,6 +52,30 @@ class IncidentEventView:
 
 
 @dataclass(frozen=True, slots=True)
+class ActionRequestView:
+    id: UUID
+    incident_id: UUID
+    action_type: str
+    status: str
+    execution_mode: str
+    requested_by_type: str
+    requested_by_id: str
+    idempotency_key: UUID
+    base_incident_version: int
+    parameters: dict[str, Any]
+    policy_version: str
+    policy_snapshot: dict[str, Any]
+    rationale: str | None
+    outcome_code: str | None
+    outcome_payload: dict[str, Any] | None
+    decided_by_type: str | None
+    decided_by_id: str | None
+    decided_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class CommandResult:
     status_code: int
     body: dict[str, Any]

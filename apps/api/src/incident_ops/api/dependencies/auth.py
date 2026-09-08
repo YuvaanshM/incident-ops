@@ -50,3 +50,17 @@ def require_actor_type(actor_type: ActorType) -> Callable[..., Awaitable[Princip
         return principal
 
     return dependency
+
+
+def require_scope_for_actor(
+    scope: str,
+    actor_type: ActorType,
+) -> Callable[..., Awaitable[Principal]]:
+    async def dependency(
+        principal: Annotated[Principal, Depends(get_current_principal)],
+    ) -> Principal:
+        enforce_scope(principal, scope)
+        enforce_actor_type(principal, actor_type)
+        return principal
+
+    return dependency
