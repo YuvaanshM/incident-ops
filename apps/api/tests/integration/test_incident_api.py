@@ -8,7 +8,7 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx2 import ASGITransport, AsyncClient
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from incident_ops.application.auth import Principal
@@ -64,6 +64,20 @@ class RaisingObserver:
             raise RuntimeError("synthetic observer failure containing private detail")
 
 
+class TwoWriterBarrierObserver:
+    def __init__(self) -> None:
+        self._arrivals = 0
+        self._release = asyncio.Event()
+
+    async def reached(self, point: str) -> None:
+        if point != "incident.update.before_conditional_write":
+            return
+        self._arrivals += 1
+        if self._arrivals == 2:
+            self._release.set()
+        await asyncio.wait_for(self._release.wait(), timeout=5)
+
+
 @pytest.fixture
 def api_settings(postgres_test_url: str) -> Settings:
     return Settings(
@@ -107,6 +121,7 @@ async def create_incident(
     client: AsyncClient,
     *,
     title: str = "Checkout latency",
+    description: str | None = None,
     service: str = "checkout",
     severity: str = "low",
 ) -> dict[str, object]:
@@ -115,7 +130,7 @@ async def create_incident(
         headers=auth_headers(idempotency_key=uuid4()),
         json={
             "title": title,
-            "description": f"Synthetic description for {title}.",
+            "description": description or f"Synthetic description for {title}.",
             "service": service,
             "severity": severity,
         },
@@ -333,10 +348,16 @@ async def test_patch_enforces_versions_idempotency_and_human_only_risk_boundarie
 
 @pytest.mark.integration
 async def test_two_simultaneous_patches_have_one_winner_and_one_persisted_conflict(
-    api_app: FastAPI,
+    api_settings: Settings,
     database_engine: AsyncEngine,
     clean_database: None,
 ) -> None:
+    api_app = create_app(
+        api_settings,
+        token_verifier=ApiTokenVerifier(),
+        database_engine=database_engine,
+        command_observer=TwoWriterBarrierObserver(),
+    )
     async with AsyncClient(
         transport=ASGITransport(app=api_app, raise_app_exceptions=False),
         base_url="http://testserver",
@@ -344,57 +365,31 @@ async def test_two_simultaneous_patches_have_one_winner_and_one_persisted_confli
         incident = await create_incident(setup_client, title="Concurrent write")
     incident_id = UUID(str(incident["id"]))
 
-    async with database_engine.connect() as blocker:
-        blocker_transaction = await blocker.begin()
-        await blocker.execute(
-            select(IncidentModel.id).where(IncidentModel.id == incident_id).with_for_update()
+    async with (
+        AsyncClient(
+            transport=ASGITransport(app=api_app, raise_app_exceptions=False),
+            base_url="http://testserver",
+        ) as first_client,
+        AsyncClient(
+            transport=ASGITransport(app=api_app, raise_app_exceptions=False),
+            base_url="http://testserver",
+        ) as second_client,
+    ):
+        first_task = asyncio.create_task(
+            first_client.patch(
+                f"/api/v1/incidents/{incident_id}",
+                headers=auth_headers(idempotency_key=uuid4()),
+                json={"expected_version": 1, "description": "First writer"},
+            )
         )
-
-        async with (
-            AsyncClient(
-                transport=ASGITransport(app=api_app, raise_app_exceptions=False),
-                base_url="http://testserver",
-            ) as first_client,
-            AsyncClient(
-                transport=ASGITransport(app=api_app, raise_app_exceptions=False),
-                base_url="http://testserver",
-            ) as second_client,
-        ):
-            first_task = asyncio.create_task(
-                first_client.patch(
-                    f"/api/v1/incidents/{incident_id}",
-                    headers=auth_headers(idempotency_key=uuid4()),
-                    json={"expected_version": 1, "description": "First writer"},
-                )
+        second_task = asyncio.create_task(
+            second_client.patch(
+                f"/api/v1/incidents/{incident_id}",
+                headers=auth_headers(idempotency_key=uuid4()),
+                json={"expected_version": 1, "description": "Second writer"},
             )
-            second_task = asyncio.create_task(
-                second_client.patch(
-                    f"/api/v1/incidents/{incident_id}",
-                    headers=auth_headers(idempotency_key=uuid4()),
-                    json={"expected_version": 1, "description": "Second writer"},
-                )
-            )
-
-            async with database_engine.connect() as monitor:
-                async with asyncio.timeout(5):
-                    while True:
-                        blocked_updates = await monitor.scalar(
-                            text(
-                                """
-                                SELECT count(*)
-                                FROM pg_stat_activity
-                                WHERE datname = current_database()
-                                  AND wait_event_type = 'Lock'
-                                  AND query ILIKE 'UPDATE incidents%'
-                                """
-                            )
-                        )
-                        if blocked_updates is not None and blocked_updates >= 2:
-                            break
-                        await asyncio.sleep(0)
-
-            await blocker_transaction.commit()
-            responses = await asyncio.wait_for(asyncio.gather(first_task, second_task), timeout=5)
+        )
+        responses = await asyncio.wait_for(asyncio.gather(first_task, second_task), timeout=5)
 
     assert sorted(response.status_code for response in responses) == [200, 409]
     assert (
@@ -477,6 +472,7 @@ async def test_advisory_endpoints_are_read_only_and_explicitly_labeled(
     incident = await create_incident(
         api_client,
         title="Checkout outage",
+        description="All users cannot submit checkout requests.",
         severity="high",
     )
     incident_id = incident["id"]

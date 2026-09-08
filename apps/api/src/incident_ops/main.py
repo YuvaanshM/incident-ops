@@ -6,16 +6,25 @@ from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio import AsyncEngine
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from incident_ops import __version__
-from incident_ops.api.errors import incident_ops_error_handler
+from incident_ops.api.errors import (
+    incident_ops_error_handler,
+    internal_error_handler,
+    validation_error_handler,
+)
 from incident_ops.api.routers.health import router as health_router
-from incident_ops.application.ports import TokenVerifier
+from incident_ops.api.routers.incidents import router as incidents_router
+from incident_ops.application.ports import CommandObserver, RateLimiter, TokenVerifier
+from incident_ops.application.services.incidents import IncidentCommandService, IncidentQueryService
 from incident_ops.config import Settings, get_settings
 from incident_ops.domain.errors import IncidentOpsError
 from incident_ops.infrastructure.database.session import create_database_engine, probe_database
+from incident_ops.infrastructure.rate_limit import FixedWindowRateLimiter
 
 logger = logging.getLogger("incident_ops.http")
 ReadinessProbe = Callable[[], Awaitable[bool]]
@@ -26,15 +35,19 @@ def create_app(
     *,
     token_verifier: TokenVerifier | None = None,
     readiness_probe: ReadinessProbe | None = None,
+    database_engine: AsyncEngine | None = None,
+    command_observer: CommandObserver | None = None,
+    rate_limiter: RateLimiter | None = None,
 ) -> FastAPI:
     """Build the HTTP adapter with validated configuration and secure defaults."""
 
     resolved_settings = settings or get_settings()
     is_production = resolved_settings.app_env == "production"
-    database_engine = None
+    owns_database_engine = database_engine is None
     resolved_probe = readiness_probe
-    if resolved_probe is None:
+    if database_engine is None:
         database_engine = create_database_engine(resolved_settings.database_url)
+    if resolved_probe is None:
 
         async def default_probe() -> bool:
             assert database_engine is not None
@@ -45,7 +58,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         yield
-        if database_engine is not None:
+        if database_engine is not None and owns_database_engine:
             await database_engine.dispose()
 
     application = FastAPI(
@@ -60,7 +73,15 @@ def create_app(
     application.state.token_verifier = token_verifier
     application.state.readiness_probe = resolved_probe
     application.state.database_engine = database_engine
+    application.state.rate_limiter = rate_limiter or FixedWindowRateLimiter()
+    application.state.incident_query_service = IncidentQueryService(database_engine)
+    application.state.incident_command_service = IncidentCommandService(
+        database_engine,
+        observer=command_observer,
+    )
     application.add_exception_handler(IncidentOpsError, incident_ops_error_handler)
+    application.add_exception_handler(RequestValidationError, validation_error_handler)
+    application.add_exception_handler(Exception, internal_error_handler)
 
     application.add_middleware(
         TrustedHostMiddleware,
@@ -110,4 +131,5 @@ def create_app(
         return response
 
     application.include_router(health_router)
+    application.include_router(incidents_router)
     return application

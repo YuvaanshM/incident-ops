@@ -55,3 +55,33 @@ class IdempotencyKeyMismatchError(IncidentOpsError):
     code = "idempotency_key_reused_with_different_payload"
     public_message = "The idempotency key was already used for a different request."
     status_code = 422
+
+
+class InvalidCursorError(IncidentOpsError):
+    code = "invalid_cursor"
+    public_message = "The pagination cursor is invalid."
+    status_code = 422
+
+
+class RateLimitExceededError(IncidentOpsError):
+    code = "rate_limit_exceeded"
+    public_message = "Too many requests. Try again later."
+    status_code = 429
+
+
+class ResourceNotFoundError(IncidentOpsError):
+    code = "not_found"
+    public_message = "The requested resource was not found."
+    status_code = 404
+
+
+class InvalidActionParametersError(IncidentOpsError):
+    code = "invalid_action_parameters"
+    public_message = "The action parameters are not valid for the requested action."
+    status_code = 422
+
+
+class NoChangesRequestedError(IncidentOpsError):
+    code = "no_changes_requested"
+    public_message = "At least one change must be requested."
+    status_code = 422
