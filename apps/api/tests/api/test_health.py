@@ -16,11 +16,34 @@ def test_liveness_is_minimal(test_settings: Settings) -> None:
 
 
 def test_readiness_does_not_expose_configuration(test_settings: Settings) -> None:
-    response = TestClient(create_app(test_settings)).get("/health/ready")
+    async def database_probe() -> bool:
+        return True
+
+    response = TestClient(create_app(test_settings, readiness_probe=database_probe)).get(
+        "/health/ready"
+    )
 
     assert response.status_code == 200
     assert response.json() == {
         "status": "ready",
-        "checks": {"configuration": "ok", "database": "deferred_to_phase_2"},
+        "checks": {"configuration": "ok", "database": "ok"},
+    }
+    assert "postgresql" not in response.text
+
+
+def test_readiness_fails_generically_when_database_is_unavailable(
+    test_settings: Settings,
+) -> None:
+    async def database_probe() -> bool:
+        return False
+
+    response = TestClient(create_app(test_settings, readiness_probe=database_probe)).get(
+        "/health/ready"
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "not_ready",
+        "checks": {"configuration": "ok", "database": "unavailable"},
     }
     assert "postgresql" not in response.text

@@ -2,7 +2,8 @@
 
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
 router = APIRouter(prefix="/health", tags=["health"])
@@ -18,14 +19,14 @@ class ReadinessChecks(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     configuration: Literal["ok"] = "ok"
-    database: Literal["deferred_to_phase_2"] = "deferred_to_phase_2"
+    database: Literal["ok", "unavailable"]
 
 
 class ReadinessResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    status: Literal["ready"] = "ready"
-    checks: ReadinessChecks = ReadinessChecks()
+    status: Literal["ready", "not_ready"]
+    checks: ReadinessChecks
 
 
 @router.get("/live", response_model=LivenessResponse)
@@ -36,7 +37,14 @@ async def live() -> LivenessResponse:
 
 
 @router.get("/ready", response_model=ReadinessResponse)
-async def ready() -> ReadinessResponse:
-    """Confirm validated configuration; database probing arrives with Phase 2."""
+async def ready(request: Request) -> ReadinessResponse | JSONResponse:
+    """Confirm validated configuration and database reachability."""
 
-    return ReadinessResponse()
+    database_ready = await request.app.state.readiness_probe()
+    result = ReadinessResponse(
+        status="ready" if database_ready else "not_ready",
+        checks=ReadinessChecks(database="ok" if database_ready else "unavailable"),
+    )
+    if not database_ready:
+        return JSONResponse(status_code=503, content=result.model_dump())
+    return result

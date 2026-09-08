@@ -5,8 +5,10 @@ description = "Backend API for the human-agent incident response control plane"
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
 dependencies = [
+  "alembic>=1.16,<2",
   "asyncpg>=0.30,<1",
   "fastapi>=0.115,<1",
+  "pgvector>=0.4,<1",
   "pydantic-settings>=2.10,<3",
   "sqlalchemy[asyncio]>=2.0.40,<3",
   "uvicorn>=0.34,<1",
@@ -18,6 +20,7 @@ dev = [
   "mypy>=1.16,<2",
   "pytest>=8.4,<10",
   "pytest-asyncio>=1,<2",
+  "pytest-cov>=7,<8",
   "ruff>=0.12,<1",
 ]
 

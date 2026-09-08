@@ -1,0 +1,57 @@
+"""Errors shared by the domain and application layers."""
+
+from collections.abc import Mapping
+
+
+class IncidentOpsError(Exception):
+    """Base error with a stable public code and generic message."""
+
+    code = "incident_ops_error"
+    public_message = "The request could not be completed."
+    status_code = 400
+
+    def __init__(self, *, details: Mapping[str, object] | None = None) -> None:
+        super().__init__(self.public_message)
+        self.details = dict(details) if details is not None else None
+
+
+class InvalidStateTransitionError(IncidentOpsError):
+    code = "invalid_state_transition"
+    public_message = "The requested state transition is not allowed."
+    status_code = 409
+
+
+class UnsupportedActionError(IncidentOpsError):
+    code = "unsupported_action"
+    public_message = "The requested action is not supported."
+    status_code = 422
+
+
+class AuthorizationDeniedError(IncidentOpsError):
+    code = "forbidden"
+    public_message = "The authenticated principal is not authorized for this operation."
+    status_code = 403
+
+
+class AuthenticationRequiredError(IncidentOpsError):
+    code = "authentication_required"
+    public_message = "Authentication is required."
+    status_code = 401
+
+
+class VersionConflictError(IncidentOpsError):
+    code = "version_conflict"
+    public_message = "The resource changed. Refresh it before retrying."
+    status_code = 409
+
+
+class ActionNotPendingError(IncidentOpsError):
+    code = "action_not_pending"
+    public_message = "The action is no longer pending."
+    status_code = 409
+
+
+class IdempotencyKeyMismatchError(IncidentOpsError):
+    code = "idempotency_key_reused_with_different_payload"
+    public_message = "The idempotency key was already used for a different request."
+    status_code = 422
