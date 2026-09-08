@@ -35,12 +35,15 @@ client.
 - Incident foundation/contract tests: 11 passed.
 - Incident PostgreSQL API tests: 7 passed.
 - Action/policy/auth tests: 29 passed.
-- Incident/action/RLS PostgreSQL tests: 19 passed.
+- Incident/action/RLS PostgreSQL tests: 22 passed.
 - Migration upgrade/downgrade and RLS tests: 6 passed.
 - OpenAPI convention tests: 8 passed.
 - Generated TypeScript client lint and typecheck passed.
 
 ## Delivery gate
 
-The final coverage result and `make check` outcome are recorded here after the
-single end-of-phase full gate runs.
+`make check` completed successfully. The final run included deterministic
+OpenAPI/client drift checks, Ruff lint/format, mypy, ESLint/Prettier, Python and
+TypeScript type checks, 72 backend unit/API tests, one web unit test, and all 47
+PostgreSQL integration tests. Coverage collected across that same backend run
+was 93%, above the required 80% threshold.
