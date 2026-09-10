@@ -5,6 +5,10 @@ import { IncidentForm } from "@/components/incidents/incident-form";
 
 import { incident } from "./fixtures";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -93,15 +97,11 @@ describe("IncidentForm", () => {
     await screen.findByRole("status");
     expect(onCreated).toHaveBeenCalledWith(incident);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/ui/incidents",
-      expect.objectContaining({
-        method: "POST",
-        headers: expect.objectContaining({
-          "Idempotency-Key": expect.any(String),
-          "X-Incident-Ops-Intent": "human-mutation",
-        }),
-      }),
-    );
+    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = new Headers(init.headers);
+    expect(path).toBe("/api/ui/incidents");
+    expect(init.method).toBe("POST");
+    expect(headers.get("Idempotency-Key")).toEqual(expect.any(String));
+    expect(headers.get("X-Incident-Ops-Intent")).toBe("human-mutation");
   });
 });

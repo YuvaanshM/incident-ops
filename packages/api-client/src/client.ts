@@ -11,8 +11,8 @@ export interface IncidentOpsClientOptions {
 export function createIncidentOpsClient(options: IncidentOpsClientOptions) {
   return createClient<paths>({
     baseUrl: options.baseUrl,
-    fetch: options.fetch,
-    headers: options.headers,
+    ...(options.fetch ? { fetch: options.fetch } : {}),
+    ...(options.headers ? { headers: options.headers } : {}),
   });
 }
 

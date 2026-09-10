@@ -29,11 +29,11 @@ describe("IncidentListScreen", () => {
     render(<IncidentListScreen initialFilters={{}} />);
 
     expect(
-      await screen.findByRole("link", { name: incident.title }),
+      (await screen.findAllByRole("link", { name: incident.title }))[0],
     ).toHaveAttribute("href", `/incidents/${incident.id}`);
     expect(screen.getAllByText("High").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Investigating").length).toBeGreaterThan(0);
-    expect(screen.getByText("v4")).toBeInTheDocument();
+    expect(screen.getAllByText("v4")).toHaveLength(2);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/ui/incidents?limit=20",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
@@ -89,8 +89,10 @@ describe("IncidentListScreen", () => {
     render(<IncidentListScreen initialFilters={{}} />);
     fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
 
-    await screen.findByRole("link", { name: nextIncident.title });
-    expect(screen.getAllByRole("link", { name: incident.title })).toHaveLength(2);
+    await screen.findAllByRole("link", { name: nextIncident.title });
+    expect(screen.getAllByRole("link", { name: incident.title })).toHaveLength(
+      2,
+    );
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/api/ui/incidents?cursor=cursor-page-2&limit=20",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
@@ -116,7 +118,7 @@ describe("IncidentListScreen", () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(
-      await screen.findByRole("link", { name: incident.title }),
+      (await screen.findAllByRole("link", { name: incident.title }))[0],
     ).toBeInTheDocument();
   });
 });

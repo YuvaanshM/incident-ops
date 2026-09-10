@@ -18,6 +18,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@incident-ops/api-client": "workspace:*",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8"

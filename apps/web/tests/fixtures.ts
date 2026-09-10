@@ -2,6 +2,7 @@ import type { components } from "@incident-ops/api-client";
 
 export type Incident = components["schemas"]["IncidentResponse"];
 export type IncidentEvent = components["schemas"]["IncidentEventResponse"];
+export type Action = components["schemas"]["ActionResponse"];
 
 export const incident: Incident = {
   id: "10000000-0000-4000-8000-000000000001",
@@ -35,4 +36,45 @@ export const timelineEvent: IncidentEvent = {
     },
   },
   occurred_at: "2026-09-09T12:42:00Z",
+};
+
+export const incidentWithJob: Incident = {
+  ...incident,
+  jobs: [
+    {
+      id: "20000000-0000-4000-8000-000000000001",
+      incident_id: incident.id,
+      stable_key: "checkout-reindex",
+      name: "Rebuild checkout search index",
+      status: "failed",
+      retry_count: 1,
+      version: 2,
+      last_error: "Synthetic timeout",
+      created_at: "2026-09-09T12:05:00Z",
+      updated_at: "2026-09-09T12:30:00Z",
+    },
+  ],
+};
+
+export const pendingAction: Action = {
+  id: "30000000-0000-4000-8000-000000000001",
+  incident_id: incident.id,
+  action_type: "retry_failed_job",
+  status: "pending",
+  execution_mode: "human",
+  requested_by_type: "human",
+  requested_by_id: "operator@example.com",
+  idempotency_key: "40000000-0000-4000-8000-000000000001",
+  base_incident_version: 4,
+  parameters: { job_id: incidentWithJob.jobs?.[0]?.id },
+  policy_version: "2026-09-05.v1",
+  policy_snapshot: { decision: "require_approval" },
+  rationale: "The first automated retry did not recover checkout.",
+  outcome_code: null,
+  outcome_payload: null,
+  decided_by_type: null,
+  decided_by_id: null,
+  decided_at: null,
+  created_at: "2026-09-09T12:43:00Z",
+  updated_at: "2026-09-09T12:43:00Z",
 };
