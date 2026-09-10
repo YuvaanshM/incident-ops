@@ -211,6 +211,13 @@ export function IncidentDetailScreen({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [saveError, setSaveError] = useState<ApiError | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [conflict, setConflict] = useState<{
+    staleVersion: number;
+    currentVersion: number;
+    latest?: Incident;
+    reviewError?: ApiError;
+  } | null>(null);
   const [action, setAction] = useState<Action | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [reloadVersion, setReloadVersion] = useState(0);
@@ -249,6 +256,7 @@ export function IncidentDetailScreen({
     event.preventDefault();
     if (!incident) return;
     const form = new FormData(event.currentTarget);
+    setSaving(true);
     setSaveError(null);
     setAnnouncement("");
     try {
@@ -268,10 +276,37 @@ export function IncidentDetailScreen({
         },
       );
       setIncident(updated);
+      setConflict(null);
       setAnnouncement(`Incident saved at version ${updated.version}.`);
       refresh();
     } catch (requestError) {
-      setSaveError(toApiError(requestError));
+      const apiError = toApiError(requestError);
+      if (
+        apiError.code === "version_conflict" &&
+        typeof apiError.details?.current_version === "number"
+      ) {
+        setConflict({
+          staleVersion: incident.version,
+          currentVersion: apiError.details.current_version,
+        });
+      } else {
+        setSaveError(apiError);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function reviewLatest() {
+    if (!conflict) return;
+    try {
+      const latest = await requestJson<Incident>(
+        `/api/ui/incidents/${incidentId}`,
+      );
+      setIncident(latest);
+      setConflict({ ...conflict, latest });
+    } catch (requestError) {
+      setConflict({ ...conflict, reviewError: toApiError(requestError) });
     }
   }
 
@@ -470,9 +505,70 @@ export function IncidentDetailScreen({
               The backend validates lifecycle and authorization rules. This edit
               will be checked against version {incident.version}.
             </p>
-            <button className="button button-primary" type="submit">
-              Save incident
-            </button>
+            {conflict ? (
+              <section className="conflict-panel" role="alert">
+                <p className="notice-kicker">Version conflict</p>
+                <h3>Your draft is safe</h3>
+                <p>
+                  You started from version {conflict.staleVersion}, but the
+                  incident is now version {conflict.currentVersion}. Nothing was
+                  overwritten.
+                </p>
+                {conflict.latest ? (
+                  <div
+                    aria-label="Latest incident version"
+                    className="latest-record"
+                  >
+                    <strong>Latest version {conflict.latest.version}</strong>
+                    <p>{conflict.latest.description}</p>
+                    <span>
+                      {conflict.latest.service} · {conflict.latest.severity} ·{" "}
+                      {conflict.latest.status}
+                    </span>
+                  </div>
+                ) : null}
+                {conflict.reviewError ? (
+                  <ErrorPanel
+                    error={conflict.reviewError}
+                    title="The latest version could not be loaded"
+                  />
+                ) : null}
+                <div className="conflict-actions">
+                  {!conflict.latest ? (
+                    <button
+                      className="button button-secondary"
+                      onClick={reviewLatest}
+                      type="button"
+                    >
+                      Review latest version
+                    </button>
+                  ) : (
+                    <button
+                      className="button button-primary"
+                      disabled={saving}
+                      type="submit"
+                    >
+                      {saving ? "Resubmitting…" : "Resubmit my draft"}
+                    </button>
+                  )}
+                  <button
+                    className="button button-quiet"
+                    onClick={() => setConflict(null)}
+                    type="button"
+                  >
+                    Keep editing
+                  </button>
+                </div>
+              </section>
+            ) : (
+              <button
+                className="button button-primary"
+                disabled={saving}
+                type="submit"
+              >
+                {saving ? "Saving…" : "Save incident"}
+              </button>
+            )}
           </form>
         </section>
       </div>

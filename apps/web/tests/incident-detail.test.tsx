@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { IncidentDetailScreen } from "@/components/incidents/incident-detail-screen";
@@ -134,36 +140,41 @@ describe("IncidentDetailScreen", () => {
     };
     let detailReads = 0;
     let patchWrites = 0;
-    const fetchMock = vi.fn().mockImplementation((path: string, init?: RequestInit) => {
-      if (init?.method === "PATCH") {
-        patchWrites += 1;
-        if (patchWrites === 1) {
-          return Promise.resolve(
-            jsonResponse(
-              {
-                error: {
-                  code: "version_conflict",
-                  message: "The incident changed before this update was applied.",
-                  details: {
-                    current_version: 5,
-                    refetch: `/api/v1/incidents/${incidentWithJob.id}`,
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((path: string, init?: RequestInit) => {
+        if (init?.method === "PATCH") {
+          patchWrites += 1;
+          if (patchWrites === 1) {
+            return Promise.resolve(
+              jsonResponse(
+                {
+                  error: {
+                    code: "version_conflict",
+                    message:
+                      "The incident changed before this update was applied.",
+                    details: {
+                      current_version: 5,
+                      refetch: `/api/v1/incidents/${incidentWithJob.id}`,
+                    },
                   },
                 },
-              },
-              409,
-            ),
+                409,
+              ),
+            );
+          }
+          return Promise.resolve(jsonResponse(saved));
+        }
+        if (path.endsWith("/timeline?limit=20")) {
+          return Promise.resolve(
+            jsonResponse({ items: [], next_cursor: null }),
           );
         }
-        return Promise.resolve(jsonResponse(saved));
-      }
-      if (path.endsWith("/timeline?limit=20")) {
-        return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
-      }
-      detailReads += 1;
-      return Promise.resolve(
-        jsonResponse(detailReads === 1 ? incidentWithJob : latest),
-      );
-    });
+        detailReads += 1;
+        return Promise.resolve(
+          jsonResponse(detailReads === 1 ? incidentWithJob : latest),
+        );
+      });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<IncidentDetailScreen incidentId={incidentWithJob.id} />);
@@ -183,12 +194,14 @@ describe("IncidentDetailScreen", () => {
       screen.getByRole("button", { name: "Review latest version" }),
     );
     expect(await screen.findByText("Latest version 5")).toBeInTheDocument();
-    expect(screen.getByText(latest.description)).toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText("Latest incident version")).getByText(
+        latest.description,
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Description")).toHaveValue(saved.description);
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Resubmit my draft" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Resubmit my draft" }));
     expect(
       await screen.findByText("Incident saved at version 6."),
     ).toBeInTheDocument();
