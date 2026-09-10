@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { auth0 } from "@/lib/auth0";
 
 import "./globals.css";
 
@@ -19,7 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AppShell>{children}</AppShell>
+        <AppShell hostedAuthEnabled={auth0 !== null}>{children}</AppShell>
       </body>
     </html>
   );

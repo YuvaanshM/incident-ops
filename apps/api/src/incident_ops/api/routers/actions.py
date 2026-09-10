@@ -77,7 +77,9 @@ async def request_action(
 async def list_actions(
     request: Request,
     principal: ApproverPrincipal,
-    status: ActionStatus | None = ActionStatus.PENDING,
+    status: ActionStatus | None = None,
+    incident_id: UUID | None = None,
+    minimum_age_minutes: Annotated[int | None, Query(ge=1, le=10_080)] = None,
     cursor: Annotated[str | None, Query(min_length=1, max_length=500)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> dict[str, object]:
@@ -85,6 +87,8 @@ async def list_actions(
     page = await _query_service(request).list_actions(
         principal=principal,
         status=status,
+        incident_id=incident_id,
+        minimum_age_minutes=minimum_age_minutes,
         cursor=cursor,
         limit=limit,
     )

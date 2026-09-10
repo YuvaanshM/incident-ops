@@ -576,6 +576,8 @@ export interface operations {
         parameters: {
             query?: {
                 status?: components["schemas"]["ActionStatus"] | null;
+                incident_id?: string | null;
+                minimum_age_minutes?: number | null;
                 cursor?: string | null;
                 limit?: number;
             };

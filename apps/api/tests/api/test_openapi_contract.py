@@ -93,6 +93,9 @@ def test_operation_ids_are_unique_and_demo_runner_is_documented_only_for_develop
         web_public_url="https://app.example.test",
         cors_origins=["https://app.example.test"],
         allowed_hosts=["api.example.test"],
+        oidc_issuer_url="https://incident-ops.example/",
+        oidc_audience="https://api.example.test",
+        oidc_jwks_url="https://incident-ops.example/.well-known/jwks.json",
     )
     production_paths = create_app(production_settings).openapi()["paths"]
     assert "/api/v1/demo/jobs/{job_id}/simulate-failure" not in production_paths

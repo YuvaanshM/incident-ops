@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     oidc_issuer_url: HttpUrl | None = None
     oidc_audience: str | None = Field(default=None, max_length=200)
     oidc_jwks_url: HttpUrl | None = None
+    oidc_actor_type_claim: str = Field(
+        default="https://incident-ops.example/actor_type",
+        min_length=1,
+        max_length=200,
+    )
     development_auth_enabled: bool = False
 
     agent_token_issuer: str | None = Field(default=None, max_length=200)
@@ -87,6 +92,9 @@ class Settings(BaseSettings):
             raise ValueError(
                 "development authentication and fixture reset are forbidden in production"
             )
+
+        if not self.oidc_issuer_url or not self.oidc_audience or not self.oidc_jwks_url:
+            raise ValueError("OIDC settings are required in production")
 
         public_urls = (self.api_public_url, self.web_public_url)
         if any(url.scheme != "https" for url in public_urls):

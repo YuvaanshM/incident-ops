@@ -315,6 +315,8 @@ class SqlAlchemyActionRequestRepository:
         self,
         *,
         status: str | None,
+        incident_id: UUID | None,
+        created_before: datetime | None,
         cursor_timestamp: datetime | None,
         cursor_id: UUID | None,
         limit: int,
@@ -322,6 +324,10 @@ class SqlAlchemyActionRequestRepository:
         statement = select(ActionRequestModel)
         if status is not None:
             statement = statement.where(ActionRequestModel.status == status)
+        if incident_id is not None:
+            statement = statement.where(ActionRequestModel.incident_id == incident_id)
+        if created_before is not None:
+            statement = statement.where(ActionRequestModel.created_at <= created_before)
         if cursor_timestamp is not None and cursor_id is not None:
             statement = statement.where(
                 or_(

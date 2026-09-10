@@ -27,6 +27,7 @@ from incident_ops.application.services.incidents import IncidentCommandService, 
 from incident_ops.config import Settings, get_settings
 from incident_ops.domain.errors import IncidentOpsError
 from incident_ops.infrastructure.auth.development import DevelopmentTokenVerifier
+from incident_ops.infrastructure.auth.oidc import OidcTokenVerifier
 from incident_ops.infrastructure.database.session import create_database_engine, probe_database
 from incident_ops.infrastructure.rate_limit import FixedWindowRateLimiter
 
@@ -53,6 +54,16 @@ def create_app(
         and resolved_settings.development_auth_enabled
     ):
         token_verifier = DevelopmentTokenVerifier()
+    elif token_verifier is None and resolved_settings.app_env == "production":
+        assert resolved_settings.oidc_issuer_url is not None
+        assert resolved_settings.oidc_audience is not None
+        assert resolved_settings.oidc_jwks_url is not None
+        token_verifier = OidcTokenVerifier(
+            issuer_url=str(resolved_settings.oidc_issuer_url),
+            audience=resolved_settings.oidc_audience,
+            jwks_url=str(resolved_settings.oidc_jwks_url),
+            actor_type_claim=resolved_settings.oidc_actor_type_claim,
+        )
     owns_database_engine = database_engine is None
     resolved_probe = readiness_probe
     if database_engine is None:

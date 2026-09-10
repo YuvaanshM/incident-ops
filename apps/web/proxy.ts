@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
+import { auth0 } from "@/lib/auth0";
+
 function createContentSecurityPolicy(nonce: string): string {
   const development = process.env.NODE_ENV !== "production";
   const scriptSources = development
@@ -29,25 +31,87 @@ function createContentSecurityPolicy(nonce: string): string {
     .join("; ");
 }
 
-export function proxy(request: NextRequest): NextResponse {
+function applySecurityHeaders(
+  response: NextResponse,
+  contentSecurityPolicy: string,
+): NextResponse {
+  response.headers.set("Content-Security-Policy", contentSecurityPolicy);
+  response.headers.set("Referrer-Policy", "no-referrer");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=()",
+  );
+  response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  if (process.env.NODE_ENV === "production") {
+    response.headers.set(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains",
+    );
+  }
+  return response;
+}
+
+export async function proxy(request: NextRequest): Promise<NextResponse> {
   const nonce = btoa(crypto.randomUUID());
   const contentSecurityPolicy = createContentSecurityPolicy(nonce);
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("Content-Security-Policy", contentSecurityPolicy);
-  requestHeaders.set("x-nonce", nonce);
+  request.headers.set("Content-Security-Policy", contentSecurityPolicy);
+  request.headers.set("x-nonce", nonce);
 
-  const response = NextResponse.next({
-    request: { headers: requestHeaders },
-  });
-  response.headers.set("Content-Security-Policy", contentSecurityPolicy);
-  return response;
+  if (!auth0) {
+    const response =
+      process.env.NODE_ENV === "production"
+        ? NextResponse.json(
+            {
+              error: {
+                code: "authentication_unavailable",
+                message:
+                  "Human sign-in is not configured for this environment.",
+              },
+            },
+            { status: 503 },
+          )
+        : NextResponse.next({ request: { headers: request.headers } });
+    return applySecurityHeaders(response, contentSecurityPolicy);
+  }
+
+  const authResponse = await auth0.middleware(request);
+  if (request.nextUrl.pathname.startsWith("/auth")) {
+    return applySecurityHeaders(authResponse, contentSecurityPolicy);
+  }
+
+  const session = await auth0.getSession(request);
+  if (!session) {
+    const response = request.nextUrl.pathname.startsWith("/api/ui/")
+      ? NextResponse.json(
+          {
+            error: {
+              code: "authentication_required",
+              message: "Sign in to continue.",
+            },
+          },
+          { status: 401 },
+        )
+      : NextResponse.redirect(
+          new URL(
+            `/auth/login?returnTo=${encodeURIComponent(
+              `${request.nextUrl.pathname}${request.nextUrl.search}`,
+            )}`,
+            request.url,
+          ),
+        );
+    return applySecurityHeaders(response, contentSecurityPolicy);
+  }
+
+  return applySecurityHeaders(authResponse, contentSecurityPolicy);
 }
 
 export const config = {
   matcher: [
     {
       source:
-        "/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
+        "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },

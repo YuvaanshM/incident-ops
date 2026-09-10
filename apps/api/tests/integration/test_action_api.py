@@ -284,6 +284,20 @@ async def test_action_inputs_policy_and_pending_queries_are_strict(
     assert queue.status_code == 200
     assert [item["id"] for item in queue.json()["items"]] == [pending.json()["id"]]
 
+    other_incident_queue = await action_client.get(
+        "/api/v1/actions",
+        headers=headers("human-token"),
+        params={"incident_id": str(uuid4())},
+    )
+    older_queue = await action_client.get(
+        "/api/v1/actions",
+        headers=headers("human-token"),
+        params={"minimum_age_minutes": 60},
+    )
+    assert other_incident_queue.status_code == older_queue.status_code == 200
+    assert other_incident_queue.json()["items"] == []
+    assert older_queue.json()["items"] == []
+
     unknown = await action_client.post(
         f"/api/v1/incidents/{incident_id}/actions",
         headers=headers("agent-token", key=uuid4()),
@@ -541,6 +555,9 @@ async def test_approval_auth_simulator_scope_and_action_rollback_boundaries(
         web_public_url="https://app.example.test",
         cors_origins=["https://app.example.test"],
         allowed_hosts=["api.example.test"],
+        oidc_issuer_url="https://incident-ops.example/",
+        oidc_audience="https://api.example.test",
+        oidc_jwks_url="https://incident-ops.example/.well-known/jwks.json",
     )
     production_app = create_app(
         production,

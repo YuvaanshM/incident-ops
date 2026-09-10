@@ -108,6 +108,8 @@ class ActionRequestRepository(Protocol):
         self,
         *,
         status: str | None,
+        incident_id: UUID | None,
+        created_before: datetime | None,
         cursor_timestamp: datetime | None,
         cursor_id: UUID | None,
         limit: int,

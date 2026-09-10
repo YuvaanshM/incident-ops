@@ -170,17 +170,7 @@ function DemoJobCard({
           onRefresh={onRefresh}
         />
       ) : null}
-      {demoToolsEnabled && job.status !== "failed" ? (
-        <button
-          className="button button-quiet"
-          disabled={simulating}
-          onClick={simulateFailure}
-          type="button"
-        >
-          {simulating ? "Simulating…" : "Simulate demo failure"}
-        </button>
-      ) : null}
-      {demoToolsEnabled && job.status === "failed" ? (
+      {demoToolsEnabled ? (
         <button
           className="button button-quiet"
           disabled={simulating}

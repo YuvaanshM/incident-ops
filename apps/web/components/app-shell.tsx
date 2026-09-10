@@ -8,7 +8,13 @@ const navigation = [
   { href: "/approvals", label: "Approvals", marker: "02" },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  hostedAuthEnabled,
+}: {
+  children: React.ReactNode;
+  hostedAuthEnabled: boolean;
+}) {
   const pathname = usePathname();
   return (
     <div className="app-shell">
@@ -54,6 +60,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <strong>Human operator</strong>
             <span>Control plane</span>
           </div>
+          {hostedAuthEnabled ? (
+            <a className="sign-out-link" href="/auth/logout">
+              Sign out
+            </a>
+          ) : null}
         </div>
       </aside>
       <header className="mobile-header">
@@ -74,9 +85,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {item.label}
             </Link>
           ))}
+          {hostedAuthEnabled ? <a href="/auth/logout">Sign out</a> : null}
         </nav>
       </header>
-      <main id="main-content">{children}</main>
+      <main id="main-content" tabIndex={-1}>
+        {children}
+      </main>
     </div>
   );
 }

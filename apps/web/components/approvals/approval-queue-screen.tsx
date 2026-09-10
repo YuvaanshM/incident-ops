@@ -19,9 +19,19 @@ const actionLabels: Record<Action["action_type"], string> = {
   retry_failed_job: "Retry failed job",
 };
 
-function approvalUrl(status: ActionStatus | "", cursor?: string): string {
+interface ApprovalFilters {
+  incidentId: string;
+  minimumAgeMinutes: number | null;
+  status: ActionStatus | "";
+}
+
+function approvalUrl(filters: ApprovalFilters, cursor?: string): string {
   const query = new URLSearchParams({ limit: "20" });
-  if (status) query.set("status", status);
+  if (filters.status) query.set("status", filters.status);
+  if (filters.incidentId) query.set("incident_id", filters.incidentId);
+  if (filters.minimumAgeMinutes) {
+    query.set("minimum_age_minutes", String(filters.minimumAgeMinutes));
+  }
   if (cursor) query.set("cursor", cursor);
   return `/api/ui/actions?${query.toString()}`;
 }
@@ -40,8 +50,12 @@ export function humanize(value: string): string {
 }
 
 export function ApprovalQueueScreen({
+  initialIncidentId = "",
+  initialMinimumAgeMinutes = null,
   initialStatus,
 }: {
+  initialIncidentId?: string;
+  initialMinimumAgeMinutes?: number | null;
   initialStatus: ActionStatus | "";
 }) {
   const [items, setItems] = useState<Action[]>([]);
@@ -51,7 +65,15 @@ export function ApprovalQueueScreen({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const initialUrl = useMemo(() => approvalUrl(initialStatus), [initialStatus]);
+  const filters = useMemo(
+    () => ({
+      incidentId: initialIncidentId,
+      minimumAgeMinutes: initialMinimumAgeMinutes,
+      status: initialStatus,
+    }),
+    [initialIncidentId, initialMinimumAgeMinutes, initialStatus],
+  );
+  const initialUrl = useMemo(() => approvalUrl(filters), [filters]);
 
   async function loadIncidentContext(actions: Action[], signal?: AbortSignal) {
     const missingIds = [
@@ -99,7 +121,7 @@ export function ApprovalQueueScreen({
     setError(null);
     try {
       const page = await requestJson<ActionPage>(
-        approvalUrl(initialStatus, nextCursor),
+        approvalUrl(filters, nextCursor),
       );
       setItems((current) => deduplicate([...current, ...page.items]));
       setNextCursor(page.next_cursor);
@@ -145,6 +167,29 @@ export function ApprovalQueueScreen({
             <option value="rejected">Rejected</option>
             <option value="failed">Failed</option>
             <option value="stale">Stale</option>
+          </select>
+        </label>
+        <label className="field">
+          <span>Incident ID</span>
+          <input
+            defaultValue={initialIncidentId}
+            inputMode="text"
+            name="incident_id"
+            placeholder="UUID"
+          />
+        </label>
+        <label className="field">
+          <span>Minimum action age</span>
+          <select
+            defaultValue={initialMinimumAgeMinutes ?? ""}
+            name="minimum_age_minutes"
+          >
+            <option value="">Any age</option>
+            <option value="15">15 minutes</option>
+            <option value="60">1 hour</option>
+            <option value="240">4 hours</option>
+            <option value="1440">1 day</option>
+            <option value="10080">7 days</option>
           </select>
         </label>
         <button className="button button-primary" type="submit">

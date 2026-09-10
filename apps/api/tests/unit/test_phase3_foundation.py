@@ -3,14 +3,14 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
+
+from incident_ops.application.auth import Principal
 from incident_ops.application.idempotency import canonical_request_fingerprint
 from incident_ops.application.pagination import decode_cursor, encode_cursor
 from incident_ops.domain.advisory import recommend_severity
-from incident_ops.infrastructure.rate_limit import FixedWindowRateLimiter
-
-from incident_ops.application.auth import Principal
 from incident_ops.domain.enums import ActorType, IncidentSeverity
 from incident_ops.domain.errors import InvalidCursorError, RateLimitExceededError
+from incident_ops.infrastructure.rate_limit import FixedWindowRateLimiter
 
 
 def test_request_fingerprint_is_stable_for_equivalent_json_and_changes_with_the_command() -> None:

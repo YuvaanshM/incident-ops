@@ -7,7 +7,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: "html",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: "http://127.0.0.1:3107",
     trace: "on-first-retry",
   },
   projects: [
@@ -17,8 +17,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "corepack pnpm dev",
-    url: "http://127.0.0.1:3000",
+    command:
+      "corepack pnpm exec next dev --webpack --hostname 127.0.0.1 --port 3107",
+    url: "http://127.0.0.1:3107",
     reuseExistingServer: !process.env.CI,
   },
 });

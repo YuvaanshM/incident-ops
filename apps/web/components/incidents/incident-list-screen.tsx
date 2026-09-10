@@ -29,26 +29,33 @@ function deduplicate(items: Incident[]): Incident[] {
   return [...new Map(items.map((item) => [item.id, item])).values()];
 }
 
-function IncidentCells({ item }: { item: Incident }) {
+function IncidentCells({
+  item,
+  table = false,
+}: {
+  item: Incident;
+  table?: boolean;
+}) {
+  const role = table ? "cell" : undefined;
   return (
     <>
-      <div className="incident-severity-cell">
+      <div className="incident-severity-cell" role={role}>
         <SeverityBadge severity={item.severity} />
       </div>
-      <div className="incident-main-cell">
+      <div className="incident-main-cell" role={role}>
         <Link className="incident-title-link" href={`/incidents/${item.id}`}>
           {item.title}
         </Link>
         <p>{item.description}</p>
         <span className="service-name">{item.service}</span>
       </div>
-      <div>
+      <div role={role}>
         <StatusBadge status={item.status} />
       </div>
-      <div>
+      <div role={role}>
         <Timestamp value={item.updated_at} />
       </div>
-      <div>
+      <div role={role}>
         <VersionBadge version={item.version} />
       </div>
     </>
@@ -215,7 +222,7 @@ export function IncidentListScreen({
                 key={item.id}
                 role="row"
               >
-                <IncidentCells item={item} />
+                <IncidentCells item={item} table />
               </div>
             ))}
           </div>

@@ -902,8 +902,42 @@
                   "type": "null"
                 }
               ],
-              "default": "pending",
               "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "incident_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Incident Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "minimum_age_minutes",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 10080,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Minimum Age Minutes"
             }
           },
           {

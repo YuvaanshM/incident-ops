@@ -5,11 +5,11 @@ operators and narrowly scoped agents work from the same authoritative data. The
 backend decides whether a requested action is auto-applied, held for human
 approval, or rejected, and every meaningful change is auditable.
 
-Phases 1 through 3 contain the reproducible repository, PostgreSQL/pgvector
-foundation, and the complete FastAPI human/product API. Incident commands,
-action policy, approvals, audit history, idempotency, concurrency control, and
-the narrow demo retry executor work against PostgreSQL. The human web product,
-production authentication provider, external delivery, retrieval calls, and
+Phases 1 through 4 contain the reproducible repository, PostgreSQL/pgvector
+foundation, the FastAPI product API, and the responsive human console. Incident
+commands, action policy, approvals, audit history, idempotency, concurrency
+control, the narrow demo retry executor, explicit conflict recovery, and hosted
+human authentication are implemented. External delivery, retrieval calls, and
 agent adapters remain in later phases.
 
 ## V1 boundaries
@@ -84,25 +84,25 @@ in the ignored `.env`, then use the public fixture credential `human-demo` or
 
 ## Commands
 
-| Command | Purpose |
-|---|---|
-| `make bootstrap` | Install locked Python and Node dependencies |
-| `make dev-db` | Start pgvector/PostgreSQL on loopback port 5432 |
-| `make test-db` | Create the disposable sibling `incident_ops_test` database if needed |
-| `make dev-api` | Start FastAPI on loopback port 8000 |
-| `make dev-web` | Start Next.js on port 3000 |
-| `make migrate` | Upgrade the configured database to the latest Alembic revision |
-| `make migration-check` | Detect ORM/schema migration drift |
-| `make export-openapi` | Deterministically export FastAPI's committed OpenAPI document |
-| `make generate-api-client` | Regenerate the transport-only TypeScript API client |
-| `make api-client-check` | Fail when OpenAPI or generated client artifacts drift |
-| `make lint` | Run Ruff, ESLint, and formatting checks |
-| `make typecheck` | Run mypy and TypeScript checks |
-| `make test` | Run backend and frontend unit/API tests |
-| `make test-integration` | Run real PostgreSQL migration, constraint, RLS, concurrency, and seed tests |
-| `make check` | Run the complete local delivery gate, including PostgreSQL integration |
-| `make seed` | Add deterministic synthetic Phase 2 fixtures |
-| `make down` | Stop local Compose services without deleting the volume |
+| Command                    | Purpose                                                                     |
+| -------------------------- | --------------------------------------------------------------------------- |
+| `make bootstrap`           | Install locked Python and Node dependencies                                 |
+| `make dev-db`              | Start pgvector/PostgreSQL on loopback port 5432                             |
+| `make test-db`             | Create the disposable sibling `incident_ops_test` database if needed        |
+| `make dev-api`             | Start FastAPI on loopback port 8000                                         |
+| `make dev-web`             | Start Next.js on port 3000                                                  |
+| `make migrate`             | Upgrade the configured database to the latest Alembic revision              |
+| `make migration-check`     | Detect ORM/schema migration drift                                           |
+| `make export-openapi`      | Deterministically export FastAPI's committed OpenAPI document               |
+| `make generate-api-client` | Regenerate the transport-only TypeScript API client                         |
+| `make api-client-check`    | Fail when OpenAPI or generated client artifacts drift                       |
+| `make lint`                | Run Ruff, ESLint, and formatting checks                                     |
+| `make typecheck`           | Run mypy and TypeScript checks                                              |
+| `make test`                | Run backend and frontend unit/API tests                                     |
+| `make test-integration`    | Run real PostgreSQL migration, constraint, RLS, concurrency, and seed tests |
+| `make check`               | Run the complete local delivery gate, including PostgreSQL integration      |
+| `make seed`                | Add deterministic synthetic Phase 2 fixtures                                |
+| `make down`                | Stop local Compose services without deleting the volume                     |
 
 During development, run only the smallest relevant test file. The final
 PostgreSQL gate is:
@@ -122,6 +122,13 @@ HTTP public URLs, development authentication, and fixture reset flags. Fixture
 loads are additive by default. A reset must be invoked explicitly with
 `--reset`, `APP_ENV=development`, and `ALLOW_DEVELOPMENT_RESET=true`; all other
 environments refuse it.
+
+The production human console uses Auth0's authorization-code/session flow. Set
+the blank `AUTH0_*` values for the Next.js encrypted HttpOnly session and the
+matching `OIDC_*` issuer, audience, JWKS URL, and namespaced human actor claim
+for FastAPI verification. The browser never receives the API access token; the
+same-origin Next.js transport retrieves it server-side. See
+[`docs/phase-4-ux.md`](docs/phase-4-ux.md) for the trust and interaction model.
 
 The embedding dimension is deliberately absent from environment configuration:
 the migration fixes it at `vector(1536)`. Each historical record stores its
@@ -156,11 +163,10 @@ not emitted in production.
 
 ## Demo flow
 
-Phase 3 implements the non-UI control-plane flow: create/read incidents, request
-a retry, auto-apply the first safe attempt, deterministically fail the demo job
-again, hold the second attempt for a human, approve/reject it, inspect the
-timeline, and surface stale optimistic-concurrency conflicts. Cited historical
-retrieval and the browser experience arrive in later phases.
+The Phase 4 browser flow creates and investigates an incident, requests a retry,
+holds higher-risk work for approval, records approve/reject decisions, inspects
+the audit ledger, and preserves a stale edit until its author reviews and
+deliberately resubmits it. Cited historical retrieval arrives in Phase 6.
 
 ## Contributing
 

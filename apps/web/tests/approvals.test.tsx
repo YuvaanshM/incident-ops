@@ -47,6 +47,33 @@ describe("ApprovalQueueScreen", () => {
     expect(screen.getByLabelText("Action status")).toHaveValue("pending");
   });
 
+  it("sends incident and age filters through the shareable queue URL", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ items: [], next_cursor: null }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <ApprovalQueueScreen
+        initialIncidentId={incident.id}
+        initialMinimumAgeMinutes={60}
+        initialStatus="pending"
+      />,
+    );
+
+    await screen.findByRole("heading", {
+      name: "No approval requests match this filter",
+    });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      `incident_id=${incident.id}`,
+    );
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "minimum_age_minutes=60",
+    );
+    expect(screen.getByLabelText("Incident ID")).toHaveValue(incident.id);
+    expect(screen.getByLabelText("Minimum action age")).toHaveValue("60");
+  });
+
   it("explains forbidden queues without exposing decision controls", async () => {
     vi.stubGlobal(
       "fetch",

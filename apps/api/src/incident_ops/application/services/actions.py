@@ -1,6 +1,7 @@
 """Policy-driven action queries, requests, reviews, and demo execution."""
 
 from collections.abc import Mapping
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -69,6 +70,8 @@ class ActionQueryService:
         *,
         principal: Principal,
         status: ActionStatus | None,
+        incident_id: UUID | None,
+        minimum_age_minutes: int | None,
         cursor: str | None,
         limit: int,
     ) -> Page:
@@ -80,6 +83,12 @@ class ActionQueryService:
         async with SqlAlchemyUnitOfWork(self._engine, principal=principal) as uow:
             actions = await uow.actions.list_page(
                 status=None if status is None else status.value,
+                incident_id=incident_id,
+                created_before=(
+                    datetime.now(UTC) - timedelta(minutes=minimum_age_minutes)
+                    if minimum_age_minutes is not None
+                    else None
+                ),
                 cursor_timestamp=cursor_timestamp,
                 cursor_id=cursor_id,
                 limit=limit + 1,

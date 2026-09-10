@@ -50,3 +50,14 @@ def test_rejects_development_flags_in_production() -> None:
             web_public_url="https://app.example.com",
             development_auth_enabled=True,
         )
+
+
+def test_requires_complete_oidc_configuration_in_production() -> None:
+    with pytest.raises(ValidationError, match="OIDC settings are required"):
+        Settings(
+            _env_file=None,
+            app_env="production",
+            database_url="postgresql://user:password@db.example.com/incident_ops",
+            api_public_url="https://api.example.com",
+            web_public_url="https://app.example.com",
+        )
