@@ -120,4 +120,84 @@ describe("IncidentDetailScreen", () => {
       });
     });
   });
+
+  it("keeps a stale draft and requires review before deliberate resubmission", async () => {
+    const latest = {
+      ...incidentWithJob,
+      description: "Another operator narrowed impact to US card payments.",
+      version: 5,
+    };
+    const saved = {
+      ...latest,
+      description: "My preserved draft with confirmed database evidence.",
+      version: 6,
+    };
+    let detailReads = 0;
+    let patchWrites = 0;
+    const fetchMock = vi.fn().mockImplementation((path: string, init?: RequestInit) => {
+      if (init?.method === "PATCH") {
+        patchWrites += 1;
+        if (patchWrites === 1) {
+          return Promise.resolve(
+            jsonResponse(
+              {
+                error: {
+                  code: "version_conflict",
+                  message: "The incident changed before this update was applied.",
+                  details: {
+                    current_version: 5,
+                    refetch: `/api/v1/incidents/${incidentWithJob.id}`,
+                  },
+                },
+              },
+              409,
+            ),
+          );
+        }
+        return Promise.resolve(jsonResponse(saved));
+      }
+      if (path.endsWith("/timeline?limit=20")) {
+        return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+      }
+      detailReads += 1;
+      return Promise.resolve(
+        jsonResponse(detailReads === 1 ? incidentWithJob : latest),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<IncidentDetailScreen incidentId={incidentWithJob.id} />);
+    const description = await screen.findByLabelText("Description");
+    fireEvent.change(description, { target: { value: saved.description } });
+    fireEvent.click(screen.getByRole("button", { name: "Save incident" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Your draft is safe" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Description")).toHaveValue(saved.description);
+    expect(
+      screen.queryByRole("button", { name: "Resubmit my draft" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Review latest version" }),
+    );
+    expect(await screen.findByText("Latest version 5")).toBeInTheDocument();
+    expect(screen.getByText(latest.description)).toBeInTheDocument();
+    expect(screen.getByLabelText("Description")).toHaveValue(saved.description);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Resubmit my draft" }),
+    );
+    expect(
+      await screen.findByText("Incident saved at version 6."),
+    ).toBeInTheDocument();
+    const patchCalls = fetchMock.mock.calls.filter(
+      ([, init]) => (init as RequestInit | undefined)?.method === "PATCH",
+    ) as [string, RequestInit][];
+    expect(JSON.parse(String(patchCalls[1]?.[1].body))).toMatchObject({
+      expected_version: 5,
+      description: saved.description,
+    });
+  });
 });
