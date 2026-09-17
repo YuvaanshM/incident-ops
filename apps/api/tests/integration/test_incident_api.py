@@ -504,3 +504,74 @@ async def test_advisory_endpoints_are_read_only_and_explicitly_labeled(
         )
     assert events_after == events_before
     assert version == 1
+
+
+async def test_each_severity_increase_enqueues_once_and_replays_do_not_duplicate(
+    api_client: AsyncClient,
+    database_engine: AsyncEngine,
+    clean_database: None,
+) -> None:
+    incident = await create_incident(api_client)
+    for version, severity in enumerate(("medium", "high", "low", "critical"), start=1):
+        key = uuid4()
+        body = {"expected_version": version, "severity": severity}
+        response = await api_client.patch(
+            f"/api/v1/incidents/{incident['id']}",
+            headers=auth_headers(idempotency_key=key),
+            json=body,
+        )
+        assert response.status_code == 200
+        replay = await api_client.patch(
+            f"/api/v1/incidents/{incident['id']}",
+            headers=auth_headers(idempotency_key=key),
+            json=body,
+        )
+        assert replay.status_code == 200
+    async with database_engine.connect() as connection:
+        rows = (
+            await connection.execute(
+                select(OutboxEventModel).where(
+                    OutboxEventModel.event_type == "slack.incident.escalated"
+                )
+            )
+        ).all()
+    assert len(rows) == 3
+    assert {row.payload["severity"] for row in rows} == {"medium", "high", "critical"}
+    assert len({row.dedupe_key for row in rows}) == 3
+
+
+async def test_runtime_rls_commands_can_enqueue_without_delivery_authority(
+    api_settings: Settings,
+    database_engine: AsyncEngine,
+    postgres_test_url: str,
+    clean_database: None,
+) -> None:
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.pool import NullPool
+    from test_rls import _ensure_runtime_role
+
+    await _ensure_runtime_role(database_engine)
+    runtime = create_async_engine(
+        postgres_test_url,
+        poolclass=NullPool,
+        connect_args={"server_settings": {"role": "incident_ops_phase2_runtime"}},
+    )
+    try:
+        app = create_app(api_settings, token_verifier=ApiTokenVerifier(), database_engine=runtime)
+        async with AsyncClient(
+            transport=ASGITransport(app=app, raise_app_exceptions=False),
+            base_url="http://testserver",
+        ) as client:
+            response = await client.post(
+                "/api/v1/incidents",
+                headers=auth_headers(idempotency_key=uuid4()),
+                json={
+                    "title": "Synthetic",
+                    "description": "Synthetic",
+                    "service": "demo",
+                    "severity": "low",
+                },
+            )
+        assert response.status_code == 201
+    finally:
+        await runtime.dispose()

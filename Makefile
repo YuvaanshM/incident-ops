@@ -2,7 +2,7 @@ SHELL := /bin/sh
 PNPM := corepack pnpm
 UV := uv
 
-.PHONY: bootstrap dev-db test-db dev-api dev-web migrate migration-check export-openapi generate-api-client api-client-check test test-integration lint typecheck check seed down
+.PHONY: bootstrap dev-db test-db dev-api dev-web dev-worker migrate migration-check export-openapi generate-api-client api-client-check test test-integration lint typecheck check seed down
 
 bootstrap:
 	$(UV) sync --project apps/api --all-groups --locked
@@ -16,6 +16,9 @@ test-db: dev-db
 
 dev-api:
 	$(UV) run --project apps/api uvicorn incident_ops.main:create_app --factory --reload --host 127.0.0.1 --port 8000
+
+dev-worker:
+	$(UV) run --project apps/api python -m incident_ops.worker.main
 
 dev-web:
 	$(PNPM) --filter @incident-ops/web dev
@@ -38,7 +41,7 @@ api-client-check:
 	git diff --exit-code -- packages/api-client/openapi.json packages/api-client/src/schema.d.ts
 
 test:
-	$(UV) run --project apps/api pytest apps/api/tests/unit apps/api/tests/api
+	$(UV) run --project apps/api pytest apps/api/tests/unit apps/api/tests/api apps/api/tests/worker
 	$(PNPM) test
 
 test-integration: test-db

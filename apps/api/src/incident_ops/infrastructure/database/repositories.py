@@ -622,16 +622,19 @@ class SqlAlchemyOutboxRepository:
         aggregate_id: UUID,
         dedupe_key: str,
         payload: Mapping[str, object],
-    ) -> OutboxEventModel:
-        event = OutboxEventModel(
-            source_event_id=source_event_id,
-            event_type=event_type,
-            aggregate_type=aggregate_type,
-            aggregate_id=aggregate_id,
-            dedupe_key=dedupe_key,
-            payload=dict(payload),
-            status="pending",
+    ) -> None:
+        # Enqueue is write-only. RETURNING would require the worker's SELECT RLS
+        # permission; command principals must never gain delivery authority.
+        await self._session.execute(
+            insert(OutboxEventModel)
+            .inline()
+            .values(
+                source_event_id=source_event_id,
+                event_type=event_type,
+                aggregate_type=aggregate_type,
+                aggregate_id=aggregate_id,
+                dedupe_key=dedupe_key,
+                payload=dict(payload),
+                status="pending",
+            )
         )
-        self._session.add(event)
-        await self._session.flush()
-        return event

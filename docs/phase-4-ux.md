@@ -2,10 +2,11 @@
 
 ## Direction
 
-The console uses an **incident ledger** visual language: warm paper surfaces,
-near-black ink, ruled dividers, tabular numbers, and a single strong severity
-rail. It should feel like an operations logbook that happens to be digital—not
-a generic dashboard made from floating cards and gradients.
+The console uses an **incident ledger** layout with cool neutral surfaces,
+a dark navigation rail, clear sans-serif headings, tabular numbers, and labeled
+severity rails. The pre-Phase 5 polish adds rounded controls, quiet shadows,
+consistent focus/press states, and compact navigation icons while preserving
+the existing workflow and responsive route structure.
 
 The interface has three visual layers only:
 

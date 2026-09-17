@@ -5,12 +5,13 @@ operators and narrowly scoped agents work from the same authoritative data. The
 backend decides whether a requested action is auto-applied, held for human
 approval, or rejected, and every meaningful change is auditable.
 
-Phases 1 through 4 contain the reproducible repository, PostgreSQL/pgvector
+Phases 1 through 5 contain the reproducible repository, PostgreSQL/pgvector
 foundation, the FastAPI product API, and the responsive human console. Incident
 commands, action policy, approvals, audit history, idempotency, concurrency
 control, the narrow demo retry executor, explicit conflict recovery, and hosted
-human authentication are implemented. External delivery, retrieval calls, and
-agent adapters remain in later phases.
+human authentication are implemented. The leased Slack outbox worker adds
+bounded retries, crash recovery, and delivery auditing. Retrieval and agent
+adapters remain in later phases.
 
 ## V1 boundaries
 
@@ -90,6 +91,7 @@ in the ignored `.env`, then use the public fixture credential `human-demo` or
 | `make dev-db`              | Start pgvector/PostgreSQL on loopback port 5432                             |
 | `make test-db`             | Create the disposable sibling `incident_ops_test` database if needed        |
 | `make dev-api`             | Start FastAPI on loopback port 8000                                         |
+| `make dev-worker`         | Deliver queued Slack notifications (requires a configured webhook)          |
 | `make dev-web`             | Start Next.js on port 3000                                                  |
 | `make migrate`             | Upgrade the configured database to the latest Alembic revision              |
 | `make migration-check`     | Detect ORM/schema migration drift                                           |
@@ -160,6 +162,16 @@ or generic execution scopes. Full invariants are enforced as repository rules in
 The production CSP is nonce-based. Development alone relaxes script/style policy
 for Next.js hot reload; that exception is explicit in `apps/web/proxy.ts` and is
 not emitted in production.
+
+## Slack notifications
+
+Phase 5 delivers creation, severity escalation, and human-required action alerts
+from the committed outbox. See the [worker runbook](docs/phase-5-outbox.md) for
+configuration, local/Compose startup, retries, readiness, and dead letters. A
+blank webhook leaves delivery disabled. Notifications use safe summaries and
+review links; incident free text stays in the app. Delivery is at least once,
+so a crash after Slack accepts a message may cause a duplicate carrying the same
+stable event IDs.
 
 ## Demo flow
 

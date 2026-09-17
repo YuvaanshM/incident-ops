@@ -21,5 +21,48 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  api:
+    profiles: [notifications]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: [uvicorn, incident_ops.main:create_app, --factory, --host, 0.0.0.0, --port, "8000"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-incident_ops}:${POSTGRES_PASSWORD:-incident_ops_local}@db:5432/${POSTGRES_DB:-incident_ops}
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs: [/tmp]
+
+  worker:
+    profiles: [notifications]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-incident_ops}:${POSTGRES_PASSWORD:-incident_ops_local}@db:5432/${POSTGRES_DB:-incident_ops}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 60s
+    healthcheck:
+      test: [CMD, python, -m, incident_ops.worker.main, --check]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs: [/tmp]
+
 volumes:
   incident_ops_postgres:

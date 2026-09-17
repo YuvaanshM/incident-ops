@@ -26,7 +26,7 @@ jobs:
       - run: uv run --project apps/api ruff check apps/api
       - run: uv run --project apps/api ruff format --check apps/api
       - run: uv run --project apps/api mypy apps/api/src
-      - run: uv run --project apps/api pytest apps/api/tests/unit apps/api/tests/api
+      - run: uv run --project apps/api pytest apps/api/tests/unit apps/api/tests/api apps/api/tests/worker
 
   web:
     runs-on: ubuntu-latest

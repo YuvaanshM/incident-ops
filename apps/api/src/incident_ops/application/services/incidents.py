@@ -358,13 +358,16 @@ class IncidentCommandService:
                 request_id=request_id,
                 payload={"changes": field_changes, "version": updated.version},
             )
-            if "severity" in field_changes and updated.severity == IncidentSeverity.CRITICAL.value:
+            severity_order = list(IncidentSeverity)
+            if "severity" in field_changes and severity_order.index(
+                IncidentSeverity(updated.severity)
+            ) > severity_order.index(IncidentSeverity(current.severity)):
                 await uow.outbox.enqueue(
                     source_event_id=event.id,
-                    event_type="slack.incident.critical",
+                    event_type="slack.incident.escalated",
                     aggregate_type="incident",
                     aggregate_id=incident_id,
-                    dedupe_key=f"slack.incident.critical:{event.id}",
+                    dedupe_key=f"slack.incident.escalated:{event.id}",
                     payload={
                         "incident_id": str(incident_id),
                         "event_id": str(event.id),

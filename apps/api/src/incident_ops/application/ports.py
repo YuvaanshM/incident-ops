@@ -196,7 +196,7 @@ class OutboxRepository(Protocol):
         aggregate_id: UUID,
         dedupe_key: str,
         payload: Mapping[str, object],
-    ) -> object: ...
+    ) -> None: ...
 
 
 class UnitOfWork(Protocol):

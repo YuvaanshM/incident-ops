@@ -321,6 +321,7 @@ class ActionCommandService:
                         "incident_id": str(incident_id),
                         "event_id": str(pending_event.id),
                         "action_type": action.action_type,
+                        "severity": incident.severity,
                     },
                 )
             else:
