@@ -19,6 +19,19 @@ class IncidentPayload(BaseModel):
     severity: Literal["low", "medium", "high", "critical"]
     # Accepted for compatibility with committed Phase 3 facts, never forwarded externally.
     title: str = Field(max_length=200, repr=False)
+    monitoring_source: str | None = Field(default=None, max_length=100)
+    service: str | None = Field(default=None, max_length=100)
+
+
+class SeverityReviewPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    incident_id: str = Field(max_length=36)
+    event_id: str = Field(max_length=36)
+    alert_id: str = Field(max_length=36)
+    stored_severity: Literal["low", "medium", "high", "critical"]
+    reported_severity: Literal["low", "medium", "high", "critical"]
+    monitoring_source: str = Field(max_length=100)
+    service: str = Field(max_length=100)
 
 
 class ActionPayload(BaseModel):
@@ -37,6 +50,17 @@ def sanitize_summary(value: str) -> str:
     return value.replace("@", "\uff20").translate(str.maketrans("_", " ", "*`~"))
 
 
+def safe_monitor_title(value: str) -> str:
+    """Fail closed for obvious secret, URL, mention, or markup-bearing titles."""
+    compact = " ".join(value.split())[:200]
+    if re.search(
+        r"(?i)(https?://|www\.|@|<|>|\b(token|secret|password|bearer|api.key|cookie)\b|[A-Za-z0-9_-]{32,})",
+        compact,
+    ):
+        return "Monitoring alert"
+    return sanitize_summary(compact) or "Monitoring alert"
+
+
 def build_message(claim: OutboxClaim, web_url: str) -> dict[str, object]:
     """Only server-authored summaries leave the app; free text may contain arbitrary secrets."""
     action_id = None
@@ -45,12 +69,20 @@ def build_message(claim: OutboxClaim, web_url: str) -> dict[str, object]:
         action_id = UUID(action.action_id)
         if action_id != claim.action_id:
             raise ValueError("invalid action reference")
-        payload: IncidentPayload | ActionPayload = action
+        payload: IncidentPayload | ActionPayload | SeverityReviewPayload = action
         heading = "Human approval required"
         summary = (
             "A retry request needs review."
             if action.action_type == "retry_failed_job"
             else "A status proposal needs review."
+        )
+    elif claim.event_type == "slack.alert.severity_review_required":
+        review = SeverityReviewPayload.model_validate(claim.payload)
+        payload = review
+        heading = "Monitoring severity review required"
+        summary = (
+            f"{review.service} from {review.monitoring_source} reports "
+            f"{review.reported_severity}; incident severity remains {review.stored_severity}."
         )
     elif claim.event_type in {
         "slack.incident.created",
@@ -63,7 +95,13 @@ def build_message(claim: OutboxClaim, web_url: str) -> dict[str, object]:
             if claim.event_type == "slack.incident.created"
             else "Severity escalated"
         )
-        summary = "Review the incident for the latest response context."
+        if payload.monitoring_source is None:
+            summary = "Review the incident for the latest response context."
+        else:
+            summary = (
+                f"{safe_monitor_title(payload.title)} · Service: {payload.service}. "
+                f"Source: {payload.monitoring_source}. Review the incident."
+            )
     else:
         raise ValueError("unsupported notification")
     if (
@@ -71,7 +109,11 @@ def build_message(claim: OutboxClaim, web_url: str) -> dict[str, object]:
         or UUID(payload.event_id) != claim.source_event_id
     ):
         raise ValueError("invalid source reference")
-    severity = payload.severity or "not recorded"
+    severity = (
+        payload.reported_severity
+        if isinstance(payload, SeverityReviewPayload)
+        else payload.severity or "not recorded"
+    )
     body = sanitize_summary(f"{heading} · Severity: {severity}. {summary}")
     references = f"Outbox: {claim.id} • Source: {claim.source_event_id}"
     # Only server-configured origins and validated UUIDs become links.

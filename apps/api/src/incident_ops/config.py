@@ -6,6 +6,7 @@ from typing import Literal, Self
 from pydantic import Field, HttpUrl, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from incident_ops.infrastructure.monitoring_config import AlertIntakeSettings
 from incident_ops.infrastructure.slack_config import SlackIntakeSettings
 
 AppEnvironment = Literal["development", "test", "production"]
@@ -49,6 +50,7 @@ class Settings(BaseSettings):
 
     slack_webhook_url: SecretStr | None = None
     slack_intake: SlackIntakeSettings = Field(default_factory=SlackIntakeSettings)
+    alert_intake: AlertIntakeSettings = Field(default_factory=AlertIntakeSettings)
     embedding_provider: str = Field(default="disabled", min_length=1, max_length=100)
     embedding_model: str | None = Field(default=None, max_length=200)
     allow_development_reset: bool = False

@@ -215,6 +215,9 @@ class ActionCommandService:
                     requested_by=principal.actor_type,
                     parameters_valid=True,
                     retry_count=retry_count,
+                    higher_monitoring_risk=await uow.alerts.has_higher_firing_risk(
+                        incident.id, incident.severity
+                    ),
                 )
             )
             policy_snapshot = policy.snapshot

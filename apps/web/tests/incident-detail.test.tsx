@@ -21,6 +21,60 @@ function jsonResponse(body: unknown, status = 200): Response {
 describe("IncidentDetailScreen", () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it("distinguishes monitor recovery from human incident resolution", async () => {
+    const monitored = {
+      ...incidentWithJob,
+      status: "open",
+      monitoring_status: "RESOLVED",
+      monitoring_updated_at: "2026-09-25T20:00:00Z",
+    };
+    const sourceTitle = "Monitor <script>alert(1)</script>";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((path: string) => {
+        if (path.endsWith("/timeline?limit=20")) {
+          return Promise.resolve(
+            jsonResponse({ items: [], next_cursor: null }),
+          );
+        }
+        if (path.endsWith("/alerts?limit=20")) {
+          return Promise.resolve(
+            jsonResponse({
+              items: [
+                {
+                  id: "10000000-0000-4000-8000-000000000001",
+                  alert_id: "10000000-0000-4000-8000-000000000002",
+                  incident_id: monitored.id,
+                  source: "monitoring-demo-prod",
+                  started_at: "2026-09-25T19:00:00Z",
+                  event_version: 2,
+                  status: "RESOLVED",
+                  severity: "critical",
+                  title: sourceTitle,
+                  outcome: "resolution_recorded",
+                  received_at: "2026-09-25T20:00:00Z",
+                },
+              ],
+              next_cursor: null,
+            }),
+          );
+        }
+        return Promise.resolve(jsonResponse(monitored));
+      }),
+    );
+
+    render(<IncidentDetailScreen incidentId={monitored.id} />);
+    expect(
+      await screen.findByRole("heading", { name: "Monitoring resolved" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/human still needs to confirm and resolve/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(sourceTitle)).toBeInTheDocument();
+    expect(document.querySelector("script")).toBeNull();
+    expect(screen.getByText(/Reported critical/)).toBeInTheDocument();
+  });
+
   it("loads authoritative incident, job, and audit context", async () => {
     vi.stubGlobal(
       "fetch",

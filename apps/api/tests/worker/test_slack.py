@@ -138,6 +138,51 @@ def test_messages_use_stable_references_and_never_forward_free_text():
     )
 
 
+def test_monitor_notifications_show_safe_context_without_leaking_secrets():
+    item = claim()
+    monitor = replace(
+        item,
+        payload={
+            **item.payload,
+            "title": "Checkout health check failing",
+            "service": "checkout",
+            "monitoring_source": "monitoring-demo-prod",
+        },
+    )
+    message = build_message(monitor, "https://console.example")
+    rendered = json.dumps(message)
+    assert "Checkout health check failing" in rendered
+    assert "checkout" in rendered and "monitoring-demo-prod" in rendered
+    assert "high" in rendered
+    assert f"/incidents/{item.incident_id}" in rendered
+    assert message["mrkdwn"] is False
+
+    unsafe = replace(
+        monitor,
+        payload={**monitor.payload, "title": "Bearer sk-verysecretvalue @channel"},
+    )
+    rendered = json.dumps(build_message(unsafe, "https://console.example"))
+    assert "Monitoring alert" in rendered
+    assert "verysecretvalue" not in rendered and "@channel" not in rendered
+
+    review = replace(
+        item,
+        event_type="slack.alert.severity_review_required",
+        payload={
+            "incident_id": str(item.incident_id),
+            "event_id": str(item.source_event_id),
+            "alert_id": str(uuid4()),
+            "stored_severity": "low",
+            "reported_severity": "high",
+            "monitoring_source": "monitoring-demo-prod",
+            "service": "checkout",
+        },
+    )
+    rendered = json.dumps(build_message(review, "https://console.example"))
+    assert "Monitoring severity review required" in rendered
+    assert "incident severity remains low" in rendered
+
+
 @pytest.mark.parametrize(
     "changes",
     [

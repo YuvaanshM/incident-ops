@@ -19,15 +19,21 @@ from incident_ops.api.errors import (
 )
 from incident_ops.api.routers.actions import demo_router
 from incident_ops.api.routers.actions import router as actions_router
+from incident_ops.api.routers.alerts import router as alerts_router
 from incident_ops.api.routers.health import router as health_router
 from incident_ops.api.routers.incidents import router as incidents_router
 from incident_ops.api.routers.slack import router as slack_router
 from incident_ops.application.ports import CommandObserver, RateLimiter, TokenVerifier
 from incident_ops.application.services.actions import ActionCommandService, ActionQueryService
+from incident_ops.application.services.alert_ingestion import (
+    AlertIngestionService,
+    AlertQueryService,
+)
 from incident_ops.application.services.incidents import IncidentCommandService, IncidentQueryService
 from incident_ops.application.services.slack_intake import SlackIntakeService
 from incident_ops.config import Settings, get_settings
 from incident_ops.domain.errors import IncidentOpsError
+from incident_ops.infrastructure.auth.alert_webhook import AlertWebhookVerifier
 from incident_ops.infrastructure.auth.development import DevelopmentTokenVerifier
 from incident_ops.infrastructure.auth.oidc import OidcTokenVerifier
 from incident_ops.infrastructure.auth.slack import SlackSignatureVerifier
@@ -103,6 +109,15 @@ def create_app(
     application.state.slack_signature_verifier = SlackSignatureVerifier(
         resolved_settings.slack_intake.signing_secret
     )
+    application.state.alert_ingress_limiter = FixedWindowRateLimiter(human_limit=120)
+    application.state.alert_source_limiter = FixedWindowRateLimiter(human_limit=30)
+    application.state.alert_signature_verifier = AlertWebhookVerifier(
+        resolved_settings.alert_intake
+    )
+    application.state.alert_ingestion_service = AlertIngestionService(
+        database_engine, resolved_settings.alert_intake, observer=command_observer
+    )
+    application.state.alert_query_service = AlertQueryService(database_engine)
     application.state.slack_intake_service = SlackIntakeService(
         database_engine, resolved_settings.slack_intake, observer=command_observer
     )
@@ -171,6 +186,7 @@ def create_app(
     application.include_router(incidents_router)
     application.include_router(actions_router)
     application.include_router(slack_router)
+    application.include_router(alerts_router)
     if not is_production:
         application.include_router(demo_router)
     return application

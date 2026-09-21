@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "source": "monitoring-demo-prod",
+  "external_alert_id": "checkout-health",
+  "service": "checkout",
+  "severity": "high",
+  "status": "FIRING",
+  "title": "Checkout health check failing",
+  "description": "Synthetic monitor received three consecutive HTTP 503 responses.",
+  "started_at": "2026-09-17T14:00:00Z",
+  "resolved_at": null,
+  "event_version": 1,
+  "metadata": {"environment": "demo", "region": "us-east"}
+}

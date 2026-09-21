@@ -69,6 +69,8 @@ class IncidentResponse(StrictSchema):
     updated_at: datetime
     resolved_at: datetime | None
     closed_at: datetime | None
+    monitoring_status: str | None = None
+    monitoring_updated_at: datetime | None = None
     jobs: list[DemoJobResponse] = Field(default_factory=list)
 
 

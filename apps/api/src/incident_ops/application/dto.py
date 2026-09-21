@@ -35,6 +35,8 @@ class IncidentView:
     updated_at: datetime
     resolved_at: datetime | None
     closed_at: datetime | None
+    monitoring_status: str | None = None
+    monitoring_updated_at: datetime | None = None
     jobs: tuple[DemoJobView, ...] = ()
 
 
@@ -95,3 +97,36 @@ class IdempotencyReservation:
 class Page:
     items: tuple[object, ...]
     next_cursor: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class AlertRecord:
+    id: UUID
+    source: str
+    external_alert_id: str
+    service: str
+    incident_id: UUID | None
+    status: str
+    severity: str
+    title: str
+    description: str
+    started_at: datetime
+    resolved_at: datetime | None
+    event_version: int
+    state_fingerprint: str
+    version: int
+
+
+@dataclass(frozen=True, slots=True)
+class AlertEventView:
+    id: UUID
+    alert_id: UUID
+    incident_id: UUID | None
+    source: str
+    started_at: datetime
+    event_version: int
+    status: str
+    severity: str
+    title: str
+    outcome: str
+    received_at: datetime

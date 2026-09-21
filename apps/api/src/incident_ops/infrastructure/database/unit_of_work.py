@@ -5,6 +5,7 @@ from types import TracebackType
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, AsyncSessionTransaction
 
 from incident_ops.application.auth import Principal
+from incident_ops.infrastructure.database.alerts import SqlAlchemyAlertRepository
 from incident_ops.infrastructure.database.repositories import (
     SqlAlchemyActionRequestRepository,
     SqlAlchemyDemoJobRepository,
@@ -35,6 +36,7 @@ class SqlAlchemyUnitOfWork:
         self._finalized = False
 
         self.incidents = SqlAlchemyIncidentRepository(self.session)
+        self.alerts = SqlAlchemyAlertRepository(self.session)
         self.actions = SqlAlchemyActionRequestRepository(self.session)
         self.jobs = SqlAlchemyDemoJobRepository(self.session)
         self.idempotency = SqlAlchemyIdempotencyRepository(self.session)

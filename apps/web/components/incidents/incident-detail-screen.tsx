@@ -16,6 +16,7 @@ import { requestJson, toApiError } from "@/lib/api/browser";
 import type { ApiError } from "@/lib/api/errors";
 import type {
   Action,
+  AlertPage,
   DemoJob,
   Incident,
   IncidentStatus,
@@ -196,6 +197,9 @@ export function IncidentDetailScreen({
 }) {
   const [incident, setIncident] = useState<Incident | null>(null);
   const [events, setEvents] = useState<TimelinePage["items"]>([]);
+  const [alerts, setAlerts] = useState<AlertPage["items"]>([]);
+  const [alertCursor, setAlertCursor] = useState<string | null>(null);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -222,11 +226,17 @@ export function IncidentDetailScreen({
         `/api/ui/incidents/${incidentId}/timeline?limit=20`,
         { signal: controller.signal },
       ),
+      requestJson<AlertPage>(
+        `/api/ui/incidents/${incidentId}/alerts?limit=20`,
+        { signal: controller.signal },
+      ),
     ])
-      .then(([incidentResult, timeline]) => {
+      .then(([incidentResult, timeline, alertHistory]) => {
         setIncident(incidentResult);
         setEvents(timeline.items);
         setNextCursor(timeline.next_cursor);
+        setAlerts(alertHistory.items);
+        setAlertCursor(alertHistory.next_cursor);
         setError(null);
       })
       .catch((requestError: unknown) => {
@@ -320,6 +330,26 @@ export function IncidentDetailScreen({
     }
   }
 
+  async function loadMoreAlerts() {
+    if (!alertCursor || loadingAlerts) return;
+    setLoadingAlerts(true);
+    try {
+      const page = await requestJson<AlertPage>(
+        `/api/ui/incidents/${incidentId}/alerts?cursor=${encodeURIComponent(alertCursor)}&limit=20`,
+      );
+      setAlerts((current) => [
+        ...new Map(
+          [...current, ...page.items].map((item) => [item.id, item]),
+        ).values(),
+      ]);
+      setAlertCursor(page.next_cursor);
+    } catch (requestError) {
+      setError(toApiError(requestError));
+    } finally {
+      setLoadingAlerts(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="page-stack">
@@ -373,6 +403,63 @@ export function IncidentDetailScreen({
           <Timestamp exact value={incident.updated_at} />
         </div>
       </header>
+
+      {incident.monitoring_status ? (
+        <section aria-labelledby="monitor-heading" className="ledger-section">
+          <div className="section-heading">
+            <span>Signal</span>
+            <div>
+              <p className="eyebrow">
+                Source observation · separate from incident state
+              </p>
+              <h2 id="monitor-heading">
+                Monitoring {incident.monitoring_status.toLowerCase()}
+              </h2>
+            </div>
+          </div>
+          <p>
+            {incident.monitoring_status === "RESOLVED"
+              ? "The monitor reports recovery. A human still needs to confirm and resolve this incident."
+              : "The monitor still reports an active signal. Incident severity and lifecycle remain human-controlled."}
+          </p>
+          {incident.monitoring_updated_at ? (
+            <p>
+              Last monitoring change:{" "}
+              <Timestamp exact value={incident.monitoring_updated_at} />
+            </p>
+          ) : null}
+          {alerts.length ? (
+            <div className="job-list">
+              {alerts.map((alert) => (
+                <article className="job-card" key={alert.id}>
+                  <p className="data-label">
+                    {alert.source} · {alert.outcome}
+                  </p>
+                  <h3>{alert.title}</h3>
+                  <p>
+                    Reported {alert.severity} · {alert.status.toLowerCase()} ·
+                    occurrence <Timestamp exact value={alert.started_at} />
+                  </p>
+                  <p>
+                    Received <Timestamp exact value={alert.received_at} /> ·
+                    event v{alert.event_version}
+                  </p>
+                </article>
+              ))}
+            </div>
+          ) : null}
+          {alertCursor ? (
+            <button
+              className="button button-secondary"
+              disabled={loadingAlerts}
+              onClick={loadMoreAlerts}
+              type="button"
+            >
+              {loadingAlerts ? "Loading…" : "Load older signals"}
+            </button>
+          ) : null}
+        </section>
+      ) : null}
 
       {action ? (
         <section className="action-result" role="status">

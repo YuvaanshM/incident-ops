@@ -48,6 +48,8 @@ async def test_upgrade_downgrade_upgrade_cycle_is_deterministic(
         "incident_events",
         "incidents",
         "outbox_events",
+        "alerts",
+        "alert_events",
     }
     assert {
         "ix_incidents_service",
@@ -85,6 +87,8 @@ async def test_pgvector_and_forced_rls_are_enabled(database_engine) -> None:
                     "incident_events",
                     "incidents",
                     "outbox_events",
+                    "alerts",
+                    "alert_events",
                 ],
             ),
         )
@@ -99,6 +103,8 @@ async def test_pgvector_and_forced_rls_are_enabled(database_engine) -> None:
     assert vector_enabled.scalar_one() is True
     assert protected_tables.scalars().all() == [
         "action_requests",
+        "alert_events",
+        "alerts",
         "demo_jobs",
         "historical_incidents",
         "idempotency_records",
@@ -127,6 +133,30 @@ async def test_all_named_constraints_and_restrictive_foreign_keys_exist(
             "ck_incidents_actor_id",
             "ck_incidents_lifecycle",
             "ck_incidents_timestamp_order",
+            "ck_incidents_monitoring_status",
+        },
+        "alerts": {
+            "ck_alerts_source",
+            "ck_alerts_external_id",
+            "ck_alerts_service",
+            "ck_alerts_title",
+            "ck_alerts_description",
+            "ck_alerts_severity",
+            "ck_alerts_status",
+            "ck_alerts_versions",
+            "ck_alerts_metadata",
+            "ck_alerts_fingerprint",
+            "ck_alerts_lifecycle",
+        },
+        "alert_events": {
+            "ck_alert_events_source",
+            "ck_alert_events_actor",
+            "ck_alert_events_version",
+            "ck_alert_events_status",
+            "ck_alert_events_severity",
+            "ck_alert_events_outcome",
+            "ck_alert_events_metadata",
+            "ck_alert_events_fingerprints",
         },
         "action_requests": {
             "ck_action_requests_type",
@@ -213,6 +243,8 @@ async def test_all_named_constraints_and_restrictive_foreign_keys_exist(
                 constraint["name"]
                 for table_name in (
                     "action_requests",
+                    "alerts",
+                    "alert_events",
                     "demo_jobs",
                     "historical_incidents",
                     "outbox_events",
@@ -231,6 +263,8 @@ async def test_all_named_constraints_and_restrictive_foreign_keys_exist(
             (
                 [
                     "action_requests",
+                    "alerts",
+                    "alert_events",
                     "demo_jobs",
                     "incident_events",
                     "outbox_events",
@@ -241,6 +275,8 @@ async def test_all_named_constraints_and_restrictive_foreign_keys_exist(
     assert actual_checks == expected_checks
     assert unique_constraints == {
         "uq_action_requests_principal_idempotency",
+        "uq_alerts_identity",
+        "uq_alert_events_delivery",
         "uq_demo_jobs_incident_stable_key",
         "uq_historical_source_id",
         "uq_idempotency_principal_operation_key",

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "source": "monitoring-demo-prod",
+  "external_alert_id": "checkout-health",
+  "service": "checkout",
+  "severity": "critical",
+  "status": "FIRING",
+  "title": "Checkout failure affecting more requests",
+  "description": "Synthetic monitor reports a broader checkout failure.",
+  "started_at": "2026-09-17T14:00:00Z",
+  "resolved_at": null,
+  "event_version": 2,
+  "metadata": {"environment": "demo", "region": "us-east"}
+}

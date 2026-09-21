@@ -78,6 +78,12 @@ async function json(route: Route, body: unknown, status = 200) {
   });
 }
 
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/ui/incidents/*/alerts?*", (route) =>
+    json(route, { items: [], next_cursor: null }),
+  );
+});
+
 async function mockApprovalContext(page: Page, action = pendingAction) {
   await page.route(`**/api/ui/actions/${actionId}`, (route) =>
     json(route, action),
@@ -375,4 +381,72 @@ test("the narrow ledger stays usable by keyboard without horizontal overflow", a
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+});
+
+test("monitor recovery is visible without resolving the incident", async ({
+  page,
+}) => {
+  const monitored = {
+    ...incident,
+    status: "open",
+    monitoring_status: "RESOLVED",
+    monitoring_updated_at: "2026-09-25T14:10:00Z",
+  };
+  const sourceTitle = "Monitor <script>alert(1)</script>";
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.route(`**/api/ui/incidents/${incidentId}`, (route) =>
+    json(route, monitored),
+  );
+  await page.route(`**/api/ui/incidents/${incidentId}/timeline?*`, (route) =>
+    json(route, { items: [], next_cursor: null }),
+  );
+  await page.route(`**/api/ui/incidents/${incidentId}/alerts?*`, (route) =>
+    json(route, {
+      items: [
+        {
+          id: "80000000-0000-4000-8000-000000000001",
+          alert_id: "80000000-0000-4000-8000-000000000002",
+          incident_id: incidentId,
+          source: "monitoring-demo-prod",
+          started_at: "2026-09-25T14:00:00Z",
+          event_version: 2,
+          status: "RESOLVED",
+          severity: "critical",
+          title: sourceTitle,
+          outcome: "resolution_recorded",
+          received_at: "2026-09-25T14:10:00Z",
+        },
+      ],
+      next_cursor: null,
+    }),
+  );
+
+  for (const width of [375, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/incidents/${incidentId}`);
+    await expect(
+      page.getByRole("heading", { name: "Monitoring resolved" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/human still needs to confirm and resolve/),
+    ).toBeVisible();
+    await expect(page.getByText(sourceTitle)).toBeVisible();
+    await expect(page.locator(".job-card script")).toHaveCount(0);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: test.info().outputPath(`monitoring-${width}.png`),
+    });
+  }
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(
+    results.violations.filter((item) =>
+      ["serious", "critical"].includes(item.impact ?? ""),
+    ),
+  ).toEqual([]);
+  expect(errors).toEqual([]);
 });

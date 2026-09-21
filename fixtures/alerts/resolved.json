@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "source": "monitoring-demo-prod",
+  "external_alert_id": "checkout-health",
+  "service": "checkout",
+  "severity": "critical",
+  "status": "RESOLVED",
+  "title": "Checkout health check recovered",
+  "description": "Synthetic monitor observed healthy checkout responses.",
+  "started_at": "2026-09-17T14:00:00Z",
+  "resolved_at": "2026-09-17T14:10:00Z",
+  "event_version": 3,
+  "metadata": {"environment": "demo", "region": "us-east"}
+}

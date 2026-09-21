@@ -61,6 +61,8 @@ def _incident_view(
         updated_at=model.updated_at,
         resolved_at=model.resolved_at,
         closed_at=model.closed_at,
+        monitoring_status=model.monitoring_status,
+        monitoring_updated_at=model.monitoring_updated_at,
         jobs=jobs,
     )
 
@@ -116,6 +118,7 @@ class SqlAlchemyIncidentRepository:
         service: str,
         severity: str,
         principal: Principal,
+        monitoring_status: str | None = None,
     ) -> IncidentView:
         model = IncidentModel(
             title=title,
@@ -126,6 +129,8 @@ class SqlAlchemyIncidentRepository:
             version=1,
             created_by_type=principal.actor_type.value,
             created_by_id=principal.subject,
+            monitoring_status=monitoring_status,
+            monitoring_updated_at=func.clock_timestamp() if monitoring_status else None,
         )
         self._session.add(model)
         await self._session.flush()

@@ -261,6 +261,116 @@
         "title": "ActionStatus",
         "type": "string"
       },
+      "AlertEventResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "alert_id": {
+            "format": "uuid",
+            "title": "Alert Id",
+            "type": "string"
+          },
+          "event_version": {
+            "title": "Event Version",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "incident_id": {
+            "format": "uuid",
+            "title": "Incident Id",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "incident_created",
+              "incident_updated",
+              "resolution_recorded",
+              "unchanged",
+              "stale_ignored",
+              "orphan_resolution",
+              "suppressed_terminal"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/IncidentSeverity"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "FIRING",
+              "RESOLVED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "alert_id",
+          "incident_id",
+          "source",
+          "started_at",
+          "event_version",
+          "status",
+          "severity",
+          "title",
+          "outcome",
+          "received_at"
+        ],
+        "title": "AlertEventResponse",
+        "type": "object"
+      },
+      "AlertListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AlertEventResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "AlertListResponse",
+        "type": "object"
+      },
       "DemoJobResponse": {
         "additionalProperties": false,
         "properties": {
@@ -517,6 +627,29 @@
             },
             "title": "Jobs",
             "type": "array"
+          },
+          "monitoring_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monitoring Status"
+          },
+          "monitoring_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monitoring Updated At"
           },
           "resolved_at": {
             "anyOf": [
@@ -1607,6 +1740,84 @@
         "summary": "Request Action",
         "tags": [
           "actions"
+        ]
+      }
+    },
+    "/api/v1/incidents/{incident_id}/alerts": {
+      "get": {
+        "operationId": "get_incident_alerts_api_v1_incidents__incident_id__alerts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "incident_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Incident Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 500,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Incident Alerts",
+        "tags": [
+          "alerts"
         ]
       }
     },

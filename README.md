@@ -13,15 +13,15 @@ human authentication are implemented. The leased Slack outbox worker adds
 bounded retries, crash recovery, and delivery auditing. Retrieval and agent
 adapters remain in later phases.
 
-The roadmap was reordered on 2026-09-17. The next feature is **Phase 8: inbound
-monitoring alerts and automatic incident creation**, followed by monitoring-aware
-remediation checks in Phase 9, WebMCP in Phase 10, and retrieval/optional AI
-investigation in Phase 11. The first Phase 8 milestone now accepts signed Slack
-issues-channel events and creates incidents atomically. It is disabled until the
-Slack app/workspace/channel bindings and signing secret are configured; see the
-[Slack intake runbook](docs/phase-8-slack-intake.md). Generic monitoring alerts and
-their occurrence/recovery lifecycle remain planned. Existing phase-named runbooks
-describe completed work and retain their historical filenames.
+The roadmap was reordered on 2026-09-17. Phase 8 now has two separate
+creation paths: signed Slack issues-channel messages and signed generic
+monitoring alerts. Both are disabled until explicit source bindings and secrets
+are configured. See the [Slack intake runbook](docs/phase-8-slack-intake.md)
+and [generic alert runbook](docs/phase-8-generic-alerts.md). A monitoring
+recovery is evidence, not human incident resolution. Phase 9 exercises the
+controlled remediation workflow, Phase 10 adds WebMCP, and Phase 11 covers
+retrieval/optional AI investigation. Existing phase-named runbooks retain
+their historical filenames.
 
 ## V1 boundaries
 
@@ -179,7 +179,8 @@ Phase 5 delivers creation, severity escalation, and human-required action alerts
 from the committed outbox. See the [worker runbook](docs/phase-5-outbox.md) for
 configuration, local/Compose startup, retries, readiness, and dead letters. A
 blank webhook leaves delivery disabled. Notifications use safe summaries and
-review links; incident free text stays in the app. Delivery is at least once,
+review links; only a bounded, redacted monitor title can leave the app, never
+descriptions or raw provider payloads. Delivery is at least once,
 so a crash after Slack accepts a message may cause a duplicate carrying the same
 stable event IDs.
 
@@ -188,8 +189,11 @@ stable event IDs.
 The Phase 4 browser flow creates and investigates an incident, requests a retry,
 holds higher-risk work for approval, records approve/reject decisions, inspects
 the audit ledger, and preserves a stale edit until its author reviews and
-deliberately resubmits it. Generic monitoring intake is next in Phase 8; cited
-historical retrieval arrives in Phase 11A under the revised roadmap.
+deliberately resubmits it. The Phase 8 monitoring flow can instead start with
+the signed synthetic fixture: FIRING creates an incident, a higher source tier
+asks for human review, RESOLVED records recovery evidence, and a human
+resolves/closes the investigation. Cited historical retrieval arrives in
+Phase 11A under the revised roadmap.
 
 ## Contributing
 

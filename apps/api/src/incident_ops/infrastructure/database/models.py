@@ -70,6 +70,10 @@ class IncidentModel(TimestampMixin, Base):
             name="ck_incidents_lifecycle",
         ),
         CheckConstraint("updated_at >= created_at", name="ck_incidents_timestamp_order"),
+        CheckConstraint(
+            "monitoring_status IS NULL OR monitoring_status IN ('FIRING','RESOLVED')",
+            name="ck_incidents_monitoring_status",
+        ),
         Index("ix_incidents_updated_id", desc("updated_at"), desc("id")),
         Index("ix_incidents_status", "status"),
         Index("ix_incidents_severity", "severity"),
@@ -97,6 +101,122 @@ class IncidentModel(TimestampMixin, Base):
     created_by_id: Mapped[str] = mapped_column(String(255), nullable=False)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    monitoring_status: Mapped[str | None] = mapped_column(String(20))
+    monitoring_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AlertModel(TimestampMixin, Base):
+    __tablename__ = "alerts"
+    __table_args__ = (
+        CheckConstraint("char_length(btrim(source)) BETWEEN 1 AND 100", name="ck_alerts_source"),
+        CheckConstraint(
+            "char_length(btrim(external_alert_id)) BETWEEN 1 AND 200", name="ck_alerts_external_id"
+        ),
+        CheckConstraint("char_length(btrim(service)) BETWEEN 1 AND 100", name="ck_alerts_service"),
+        CheckConstraint("char_length(btrim(title)) BETWEEN 1 AND 200", name="ck_alerts_title"),
+        CheckConstraint(
+            "char_length(btrim(description)) BETWEEN 1 AND 5000", name="ck_alerts_description"
+        ),
+        CheckConstraint(
+            "severity IN ('low','medium','high','critical')", name="ck_alerts_severity"
+        ),
+        CheckConstraint("status IN ('FIRING','RESOLVED')", name="ck_alerts_status"),
+        CheckConstraint("event_version >= 1 AND version >= 1", name="ck_alerts_versions"),
+        CheckConstraint("jsonb_typeof(metadata) = 'object'", name="ck_alerts_metadata"),
+        CheckConstraint("state_fingerprint ~ '^[0-9a-f]{64}$'", name="ck_alerts_fingerprint"),
+        CheckConstraint(
+            "(status = 'FIRING' AND resolved_at IS NULL) OR "
+            "(status = 'RESOLVED' AND resolved_at >= started_at)",
+            name="ck_alerts_lifecycle",
+        ),
+        UniqueConstraint("source", "external_alert_id", "service", name="uq_alerts_identity"),
+        Index("ix_alerts_incident", "incident_id"),
+        Index("ix_alerts_source_status_received", "source", "status", desc("last_received_at")),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    source: Mapped[str] = mapped_column(String(100), nullable=False)
+    external_alert_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    service: Mapped[str] = mapped_column(String(100), nullable=False)
+    incident_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("incidents.id", ondelete="RESTRICT")
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    event_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, nullable=False)
+    state_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    version: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="1")
+    first_received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    last_received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class AlertEventModel(Base):
+    __tablename__ = "alert_events"
+    __table_args__ = (
+        CheckConstraint(
+            "char_length(btrim(source)) BETWEEN 1 AND 100", name="ck_alert_events_source"
+        ),
+        CheckConstraint(
+            "char_length(btrim(actor_id)) BETWEEN 1 AND 255", name="ck_alert_events_actor"
+        ),
+        CheckConstraint("event_version >= 1", name="ck_alert_events_version"),
+        CheckConstraint("status IN ('FIRING','RESOLVED')", name="ck_alert_events_status"),
+        CheckConstraint(
+            "severity IN ('low','medium','high','critical')", name="ck_alert_events_severity"
+        ),
+        CheckConstraint(
+            "outcome IN ('incident_created','incident_updated','resolution_recorded',"
+            "'unchanged','stale_ignored','orphan_resolution','suppressed_terminal')",
+            name="ck_alert_events_outcome",
+        ),
+        CheckConstraint("jsonb_typeof(metadata) = 'object'", name="ck_alert_events_metadata"),
+        CheckConstraint(
+            "request_fingerprint ~ '^[0-9a-f]{64}$' AND state_fingerprint ~ '^[0-9a-f]{64}$'",
+            name="ck_alert_events_fingerprints",
+        ),
+        UniqueConstraint("source", "idempotency_key", name="uq_alert_events_delivery"),
+        Index("ix_alert_events_alert_received", "alert_id", desc("received_at"), desc("id")),
+        Index("ix_alert_events_incident_received", "incident_id", desc("received_at"), desc("id")),
+        Index("ix_alert_events_occurrence", "alert_id", "started_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    alert_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("alerts.id", ondelete="RESTRICT"), nullable=False
+    )
+    incident_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("incidents.id", ondelete="RESTRICT")
+    )
+    source: Mapped[str] = mapped_column(String(100), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    idempotency_key: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    request_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    event_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, nullable=False)
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    state_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(40), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class ActionRequestModel(TimestampMixin, Base):

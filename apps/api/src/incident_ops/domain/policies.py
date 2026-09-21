@@ -10,7 +10,7 @@ from incident_ops.domain.enums import (
     PolicyDecision,
 )
 
-POLICY_VERSION = "2026-09-05.v1"
+POLICY_VERSION = "2026-09-25.v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +20,7 @@ class ActionPolicyInput:
     requested_by: ActorType
     parameters_valid: bool
     retry_count: int
+    higher_monitoring_risk: bool = False
 
     def __post_init__(self) -> None:
         if self.retry_count < 0:
@@ -45,6 +46,7 @@ class EvaluatedPolicy:
                 "requested_by": self.facts.requested_by.value,
                 "parameters_valid": self.facts.parameters_valid,
                 "retry_count": self.facts.retry_count,
+                "higher_monitoring_risk": self.facts.higher_monitoring_risk,
             },
         }
 
@@ -74,7 +76,7 @@ def evaluate_action_policy(policy_input: ActionPolicyInput) -> EvaluatedPolicy:
         and policy_input.retry_count == 0
         and policy_input.incident_severity is IncidentSeverity.LOW
     )
-    if definition.auto_allowed and first_eligible_retry:
+    if definition.auto_allowed and first_eligible_retry and not policy_input.higher_monitoring_risk:
         return EvaluatedPolicy(
             decision=PolicyDecision.AUTO_APPLY,
             reasons=("low_severity_first_retry",),

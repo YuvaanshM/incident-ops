@@ -45,6 +45,12 @@ class VersionConflictError(IncidentOpsError):
     status_code = 409
 
 
+class AlertVersionConflictError(IncidentOpsError):
+    code = "alert_version_conflict"
+    public_message = "The alert version conflicts with an existing observation."
+    status_code = 409
+
+
 class ActionNotPendingError(IncidentOpsError):
     code = "action_not_pending"
     public_message = "The action is no longer pending."
@@ -97,6 +103,18 @@ class InvalidWebhookError(IncidentOpsError):
     code = "invalid_webhook"
     public_message = "The webhook request is invalid."
     status_code = 400
+
+
+class InvalidAlertFieldsError(InvalidWebhookError):
+    code = "invalid_alert_fields"
+    public_message = "The normalized alert fields are invalid."
+    status_code = 422
+
+
+class UnsupportedWebhookMediaError(InvalidWebhookError):
+    code = "unsupported_webhook_media"
+    public_message = "The webhook media type is unsupported."
+    status_code = 415
 
 
 class WebhookTooLargeError(InvalidWebhookError):

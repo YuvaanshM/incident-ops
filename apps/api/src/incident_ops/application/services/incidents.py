@@ -175,6 +175,7 @@ async def create_incident_in_transaction(
     severity: IncidentSeverity,
     observer: CommandObserver,
     source: Mapping[str, object] | None = None,
+    monitoring_status: str | None = None,
 ) -> IncidentView:
     """Write creation, audit, and notification intent without committing the caller's UoW."""
     incident = await uow.incidents.add_incident(
@@ -183,6 +184,7 @@ async def create_incident_in_transaction(
         service=service,
         severity=severity.value,
         principal=principal,
+        monitoring_status=monitoring_status,
     )
     event = await uow.events.append(
         incident_id=incident.id,
@@ -209,6 +211,14 @@ async def create_incident_in_transaction(
             "event_id": str(event.id),
             "severity": incident.severity,
             "title": incident.title,
+            **(
+                {
+                    "monitoring_source": source["monitoring_source"],
+                    "service": incident.service,
+                }
+                if source is not None and "monitoring_source" in source
+                else {}
+            ),
         },
     )
     return incident

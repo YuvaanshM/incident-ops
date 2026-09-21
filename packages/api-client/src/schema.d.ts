@@ -142,6 +142,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/incidents/{incident_id}/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Incident Alerts */
+        get: operations["get_incident_alerts_api_v1_incidents__incident_id__alerts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/incidents/{incident_id}/postmortem-draft": {
         parameters: {
             query?: never;
@@ -330,6 +347,58 @@ export interface components {
          * @enum {string}
          */
         ActionStatus: "pending" | "applied" | "rejected" | "failed" | "stale";
+        /** AlertEventResponse */
+        AlertEventResponse: {
+            /**
+             * Alert Id
+             * Format: uuid
+             */
+            alert_id: string;
+            /** Event Version */
+            event_version: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Incident Id
+             * Format: uuid
+             */
+            incident_id: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "incident_created" | "incident_updated" | "resolution_recorded" | "unchanged" | "stale_ignored" | "orphan_resolution" | "suppressed_terminal";
+            /**
+             * Received At
+             * Format: date-time
+             */
+            received_at: string;
+            severity: components["schemas"]["IncidentSeverity"];
+            /** Source */
+            source: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "FIRING" | "RESOLVED";
+            /** Title */
+            title: string;
+        };
+        /** AlertListResponse */
+        AlertListResponse: {
+            /** Items */
+            items: components["schemas"]["AlertEventResponse"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /** DemoJobResponse */
         DemoJobResponse: {
             /**
@@ -444,6 +513,10 @@ export interface components {
             id: string;
             /** Jobs */
             jobs?: components["schemas"]["DemoJobResponse"][];
+            /** Monitoring Status */
+            monitoring_status?: string | null;
+            /** Monitoring Updated At */
+            monitoring_updated_at?: string | null;
             /** Resolved At */
             resolved_at: string | null;
             /** Service */
@@ -904,6 +977,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_incident_alerts_api_v1_incidents__incident_id__alerts_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                incident_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertListResponse"];
                 };
             };
             /** @description Validation Error */
