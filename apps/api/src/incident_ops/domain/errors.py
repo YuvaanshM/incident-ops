@@ -85,3 +85,25 @@ class NoChangesRequestedError(IncidentOpsError):
     code = "no_changes_requested"
     public_message = "At least one change must be requested."
     status_code = 422
+
+
+class WebhookAuthenticationError(IncidentOpsError):
+    code = "invalid_webhook_authentication"
+    public_message = "Webhook authentication failed."
+    status_code = 401
+
+
+class InvalidWebhookError(IncidentOpsError):
+    code = "invalid_webhook"
+    public_message = "The webhook request is invalid."
+    status_code = 400
+
+
+class WebhookTooLargeError(InvalidWebhookError):
+    status_code = 413
+
+
+class IngestionUnavailableError(IncidentOpsError):
+    code = "ingestion_unavailable"
+    public_message = "Intake is temporarily unavailable. Retry later."
+    status_code = 503

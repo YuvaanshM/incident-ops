@@ -5,13 +5,23 @@ operators and narrowly scoped agents work from the same authoritative data. The
 backend decides whether a requested action is auto-applied, held for human
 approval, or rejected, and every meaningful change is auditable.
 
-Phases 1 through 5 contain the reproducible repository, PostgreSQL/pgvector
+The completed work (historical phases 1 through 5) contains the reproducible repository, PostgreSQL/pgvector
 foundation, the FastAPI product API, and the responsive human console. Incident
 commands, action policy, approvals, audit history, idempotency, concurrency
 control, the narrow demo retry executor, explicit conflict recovery, and hosted
 human authentication are implemented. The leased Slack outbox worker adds
 bounded retries, crash recovery, and delivery auditing. Retrieval and agent
 adapters remain in later phases.
+
+The roadmap was reordered on 2026-09-17. The next feature is **Phase 8: inbound
+monitoring alerts and automatic incident creation**, followed by monitoring-aware
+remediation checks in Phase 9, WebMCP in Phase 10, and retrieval/optional AI
+investigation in Phase 11. The first Phase 8 milestone now accepts signed Slack
+issues-channel events and creates incidents atomically. It is disabled until the
+Slack app/workspace/channel bindings and signing secret are configured; see the
+[Slack intake runbook](docs/phase-8-slack-intake.md). Generic monitoring alerts and
+their occurrence/recovery lifecycle remain planned. Existing phase-named runbooks
+describe completed work and retain their historical filenames.
 
 ## V1 boundaries
 
@@ -178,7 +188,8 @@ stable event IDs.
 The Phase 4 browser flow creates and investigates an incident, requests a retry,
 holds higher-risk work for approval, records approve/reject decisions, inspects
 the audit ledger, and preserves a stale edit until its author reviews and
-deliberately resubmits it. Cited historical retrieval arrives in Phase 6.
+deliberately resubmits it. Generic monitoring intake is next in Phase 8; cited
+historical retrieval arrives in Phase 11A under the revised roadmap.
 
 ## Contributing
 

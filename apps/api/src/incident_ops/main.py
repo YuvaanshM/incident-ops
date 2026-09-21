@@ -21,13 +21,16 @@ from incident_ops.api.routers.actions import demo_router
 from incident_ops.api.routers.actions import router as actions_router
 from incident_ops.api.routers.health import router as health_router
 from incident_ops.api.routers.incidents import router as incidents_router
+from incident_ops.api.routers.slack import router as slack_router
 from incident_ops.application.ports import CommandObserver, RateLimiter, TokenVerifier
 from incident_ops.application.services.actions import ActionCommandService, ActionQueryService
 from incident_ops.application.services.incidents import IncidentCommandService, IncidentQueryService
+from incident_ops.application.services.slack_intake import SlackIntakeService
 from incident_ops.config import Settings, get_settings
 from incident_ops.domain.errors import IncidentOpsError
 from incident_ops.infrastructure.auth.development import DevelopmentTokenVerifier
 from incident_ops.infrastructure.auth.oidc import OidcTokenVerifier
+from incident_ops.infrastructure.auth.slack import SlackSignatureVerifier
 from incident_ops.infrastructure.database.session import create_database_engine, probe_database
 from incident_ops.infrastructure.rate_limit import FixedWindowRateLimiter
 
@@ -95,6 +98,14 @@ def create_app(
     application.state.readiness_probe = resolved_probe
     application.state.database_engine = database_engine
     application.state.rate_limiter = rate_limiter or FixedWindowRateLimiter()
+    application.state.slack_ingress_limiter = FixedWindowRateLimiter(human_limit=120)
+    application.state.slack_source_limiter = FixedWindowRateLimiter(human_limit=30)
+    application.state.slack_signature_verifier = SlackSignatureVerifier(
+        resolved_settings.slack_intake.signing_secret
+    )
+    application.state.slack_intake_service = SlackIntakeService(
+        database_engine, resolved_settings.slack_intake, observer=command_observer
+    )
     application.state.incident_query_service = IncidentQueryService(database_engine)
     application.state.incident_command_service = IncidentCommandService(
         database_engine,
@@ -159,6 +170,7 @@ def create_app(
     application.include_router(health_router)
     application.include_router(incidents_router)
     application.include_router(actions_router)
+    application.include_router(slack_router)
     if not is_production:
         application.include_router(demo_router)
     return application

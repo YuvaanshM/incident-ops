@@ -59,9 +59,53 @@ tracked automatically. Production secrets live in the deployment secret manager.
 
 ## Phase gates
 
-Phase 1 establishes these rules and secure defaults but does not pretend to
-implement later controls. Phase 2 added parameterized persistence and tested
-RLS. Phase 3 adds verified auth dependencies, scope/actor checks, strict API
-schemas, idempotency, rate limiting, and authorization tests. Phase 4 must add the
-chosen human OIDC flow and CSRF handling. Phase 7 may add only the narrow agent
-tools in the specification.
+The implementation plan was reordered on 2026-09-17. Historical phases 1-5
+already supplied setup, persistence/RLS, the API, human UI/auth, and the Slack
+worker. In the new learning sequence, auth is Phase 5, core workflow is Phase 6,
+Slack is Phase 7, monitoring ingestion is Phase 8, controlled remediation is
+Phase 9, WebMCP is Phase 10, and optional investigation is Phase 11. Existing
+controls remain in place; this renumbering does not disable or postpone them.
+
+## Slack channel intake (first Phase 8 milestone)
+
+Slack intake is disabled by default. Verify Slack's HMAC over original body bytes
+and reject delivery timestamps outside 300 seconds before JSON parsing. Require
+the configured app/workspace/channel, exclude shared channels, and reject browser
+credentials. Ignore bots/replies/edits to prevent loops. Strict bounded provider
+normalization yields only text and source IDs; service/severity come from server
+configuration. See [ADR-0006](adr/0006-slack-channel-intake.md).
+
+The source-bound `system` principal has only `slack:ingest`. It can create an open
+incident and its audit/outbox/idempotency records in one transaction; it cannot
+update incidents or operate actions. Additive RLS policies enforce actor, scope,
+source isolation, and configured creation values. Durable message and event
+reservations prevent duplicate creation even within the signature replay window.
+No raw Slack envelope, legacy token, signature, or headers enter persistence/logs.
+The existing notification worker still omits message text from outbound payloads.
+
+## Planned generic monitoring boundary (remaining Phase 8 work)
+
+Monitoring sources use a separate signed, timestamp-checked webhook with only
+source/service-bound `alerts:ingest` authority. A verifier derives the system
+principal; neither payload fields nor a human/agent token can supply it. Check
+strict body limits, source-scoped idempotency, provider occurrence/version, and
+default-deny RLS on alerts and their immutable receipt history. Never grant
+general incident-update authority to all system principals.
+
+The ingestion service may initialize a new incident, including its reported
+critical severity, through a shared transaction. It cannot escalate an existing
+incident, overwrite a human's edits, approve/execute remediation, or resolve/close
+an investigation from a monitor's recovery signal. Recovery and later severity
+reports update source context and audit. Higher reported risk requests human
+attention and prevents automatic remediation from using an outdated low label.
+
+Alert, incident, audit, idempotency, and outbox writes commit atomically. External
+monitors do not know incident versions; the backend reads and checks the version
+inside the transaction, while source versions order monitoring observations.
+Meaningful updates invalidate stale proposals; identical heartbeats do not.
+
+The planned creation notification includes a bounded/redacted safe alert title,
+service, source, severity, and server-built link. Keep plain-text rendering and
+mention suppression; descriptions/raw provider payloads stay out of Slack.
+Signatures, keys, original bodies, and sensitive headers never enter logs. Later
+provider or Slack-channel adapters must use this same application boundary.

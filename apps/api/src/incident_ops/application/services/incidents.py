@@ -164,6 +164,56 @@ class IncidentQueryService:
         }
 
 
+async def create_incident_in_transaction(
+    uow: SqlAlchemyUnitOfWork,
+    *,
+    principal: Principal,
+    request_id: UUID,
+    title: str,
+    description: str,
+    service: str,
+    severity: IncidentSeverity,
+    observer: CommandObserver,
+    source: Mapping[str, object] | None = None,
+) -> IncidentView:
+    """Write creation, audit, and notification intent without committing the caller's UoW."""
+    incident = await uow.incidents.add_incident(
+        title=title,
+        description=description,
+        service=service,
+        severity=severity.value,
+        principal=principal,
+    )
+    event = await uow.events.append(
+        incident_id=incident.id,
+        event_type="incident.created",
+        principal=principal,
+        request_id=request_id,
+        payload={
+            "title": incident.title,
+            "service": incident.service,
+            "severity": incident.severity,
+            "status": incident.status,
+            **({"source": dict(source)} if source is not None else {}),
+        },
+    )
+    await observer.reached("incident.create.after_event")
+    await uow.outbox.enqueue(
+        source_event_id=event.id,
+        event_type="slack.incident.created",
+        aggregate_type="incident",
+        aggregate_id=incident.id,
+        dedupe_key=f"slack.incident.created:{event.id}",
+        payload={
+            "incident_id": str(incident.id),
+            "event_id": str(event.id),
+            "severity": incident.severity,
+            "title": incident.title,
+        },
+    )
+    return incident
+
+
 class IncidentCommandService:
     def __init__(
         self,
@@ -207,38 +257,15 @@ class IncidentCommandService:
                 await uow.rollback()
                 return replay
 
-            incident = await uow.incidents.add_incident(
+            incident = await create_incident_in_transaction(
+                uow,
+                principal=principal,
+                request_id=request_id,
                 title=title,
                 description=description,
                 service=service,
-                severity=severity.value,
-                principal=principal,
-            )
-            event = await uow.events.append(
-                incident_id=incident.id,
-                event_type="incident.created",
-                principal=principal,
-                request_id=request_id,
-                payload={
-                    "title": incident.title,
-                    "service": incident.service,
-                    "severity": incident.severity,
-                    "status": incident.status,
-                },
-            )
-            await self._observer.reached("incident.create.after_event")
-            await uow.outbox.enqueue(
-                source_event_id=event.id,
-                event_type="slack.incident.created",
-                aggregate_type="incident",
-                aggregate_id=incident.id,
-                dedupe_key=f"slack.incident.created:{event.id}",
-                payload={
-                    "incident_id": str(incident.id),
-                    "event_id": str(event.id),
-                    "severity": incident.severity,
-                    "title": incident.title,
-                },
+                severity=severity,
+                observer=self._observer,
             )
             body = incident_body(incident)
             await uow.idempotency.complete(

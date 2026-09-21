@@ -6,6 +6,8 @@ from typing import Literal, Self
 from pydantic import Field, HttpUrl, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from incident_ops.infrastructure.slack_config import SlackIntakeSettings
+
 AppEnvironment = Literal["development", "test", "production"]
 
 
@@ -17,6 +19,8 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        env_nested_delimiter="__",
+        hide_input_in_errors=True,
     )
 
     app_env: AppEnvironment = "development"
@@ -44,6 +48,7 @@ class Settings(BaseSettings):
     agent_token_signing_key: SecretStr | None = None
 
     slack_webhook_url: SecretStr | None = None
+    slack_intake: SlackIntakeSettings = Field(default_factory=SlackIntakeSettings)
     embedding_provider: str = Field(default="disabled", min_length=1, max_length=100)
     embedding_model: str | None = Field(default=None, max_length=200)
     allow_development_reset: bool = False

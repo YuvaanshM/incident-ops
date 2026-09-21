@@ -1,12 +1,12 @@
 # Future severity assistance: research and feature scope
 
-Research date: 2026-09-15. Status: **planned post-v1 extension; no implementation in this change**.
+Research date: 2026-09-15. Roadmap references updated 2026-09-17: former Phase 8 severity assistance is now Phase 12B; new Phase 8 is monitoring ingestion. Status: **planned post-v1 extension; no implementation in this change**.
 
 ## Recommendation
 
 Build an advisory severity assessor that checks reviewed incident history before asking an LLM for a recommendation. Preserve each assessment and human disposition with provenance, subject to retention rules. Publish only deliberately reviewed cases as reusable knowledge. Reuse an existing assessment only when its incident, evidence, permissions, time validity, and configuration still match.
 
-This separates three responsibilities: PostgreSQL records what happened; retrieval supplies relevant examples; a bounded LLM explains how the current evidence fits the severity rubric. A verified human remains responsible for changing authoritative severity. The extension is Phase 8, after the existing v1 phases, with offline evaluation before operational use.
+This separates three responsibilities: PostgreSQL records what happened; retrieval supplies relevant examples; a bounded LLM explains how the current evidence fits the severity rubric. A verified human remains responsible for changing authoritative severity. The extension is Phase 12B, after the existing v1 phases, with offline evaluation before operational use.
 
 **The expected benefit remains a hypothesis:** better consistency and explanations, with fewer repeated provider calls. The research establishes failure modes, not that RAG will outperform simpler rules on this application's incidents. The release gate must measure that benefit.
 
@@ -21,11 +21,11 @@ The current [advisory classifier](../../apps/api/src/incident_ops/domain/advisor
 | Medium | Latency, degraded, or error-rate wording |
 | Low | No elevated signal matched |
 
-The existing endpoint returns a recommendation without changing the incident. Stored severity is human-controlled and affects action policy, including eligibility for the first automatic retry. Consequently, an incorrect suggestion can still cause harm if a human accepts it without checking the impact. Advisory status alone does not remove that indirect risk. These are findings from the local implementation and [security model](../security-model.md), not claims about a deployed LLM.
+The existing endpoint returns a recommendation without changing the incident. Stored severity affects action policy, including eligibility for the first automatic retry; subsequent severity changes are human-controlled. Consequently, an incorrect suggestion can still cause harm if a human accepts it without checking the impact. Advisory status alone does not remove that indirect risk. These are findings from the local implementation and [security model](../security-model.md), not claims about a deployed LLM.
 
-V1's rule-based classifier and Phase 6's LLM-free remediation retrieval stay intact. Phase 6 plans to embed severity and resolution alongside symptoms; that representation is unsuitable for assessing an unknown severity. Phase 8 needs a separate, versioned retrieval purpose built from facts available at triage time. A final label or resolution must not leak into the query or select its own supporting examples.
+V1's rule-based classifier and Phase 11A's LLM-free remediation retrieval stay intact. The new monitoring-ingestion Phase 8 initializes incidents from source reports without an LLM; these reports are not independently reviewed severity labels and cannot automatically enter this extension's curated corpus. Phase 11A plans to embed severity and resolution alongside symptoms; that representation is unsuitable for assessing an unknown severity. Phase 12B needs a separate, versioned retrieval purpose built from facts available at triage time. A final label or resolution must not leak into the query or select its own supporting examples.
 
-Before Phase 8 coding, extend the product specification explicitly for this separate advisory workflow and record its contracts in an ADR. [ADR-0005](../adr/0005-portable-rag-embeddings.md) already requires provider/model compatibility, a separate generation port, and an approved data-processing arrangement before real incident data goes to a provider. This plan does not select a provider or authorize sending real records externally.
+Before Phase 12B coding, extend the product specification explicitly for this separate advisory workflow and record its contracts in an ADR. [ADR-0005](../adr/0005-portable-rag-embeddings.md) already requires provider/model compatibility, a separate generation port, and an approved data-processing arrangement before real incident data goes to a provider. This plan does not select a provider or authorize sending real records externally.
 
 ## 2. Research findings
 
@@ -104,7 +104,7 @@ Display “Suggested severity,” evidence time, relevant differences, missing f
 
 ### Logical records and service boundaries
 
-Plan for impact snapshots, reviewed case revisions, purpose-specific embeddings, assessment jobs/results, human reviews, and disposable exact-result cache entries with source dependencies and corpus generations. Final table layout belongs in the Phase 8 ADR; reuse existing tables where semantics fit. PostgreSQL remains authoritative and the initial implementation needs no Redis, separate vector store, or training service.
+Plan for impact snapshots, reviewed case revisions, purpose-specific embeddings, assessment jobs/results, human reviews, and disposable exact-result cache entries with source dependencies and corpus generations. Final table layout belongs in the Phase 12B ADR; reuse existing tables where semantics fit. PostgreSQL remains authoritative and the initial implementation needs no Redis, separate vector store, or training service.
 
 Each new domain table requires default-deny RLS and explicit policies, including vectors, cache dependencies, jobs, reviews, and derived results. Application services perform authorization even when a worker uses a privileged role. Derived results inherit all relevant source restrictions: hiding a citation does not make a rationale safe to disclose. Recheck access before retrieval, provider submission, result delivery, and review. Permission checks that cannot complete fail closed.
 
@@ -248,7 +248,7 @@ Rollback disables generation/result-cache use and leaves the ordinary human work
 
 ## 8. Delivery scope and unresolved decisions
 
-The implementation plan divides this extension into 8A (rubric/contracts/data/evaluation protocol), 8B (reviewed case lifecycle and retrieval), 8C (bounded assessor and human review), 8D (exact caching and invalidation), and 8E (evaluation and rollout). Every stage retains the existing backend ownership, RLS, idempotency, concurrency, and transaction gates.
+The implementation plan divides this extension into 12B.1 (rubric/contracts/data/evaluation protocol), 12B.2 (reviewed case lifecycle and retrieval), 12B.3 (bounded assessor and human review), 12B.4 (exact caching and invalidation), and 12B.5 (evaluation and rollout). Every stage retains the existing backend ownership, RLS, idempotency, concurrency, and transaction gates.
 
 **Included:** triage snapshots, human-reviewed case publication, a separate severity retrieval representation, advisory suggestion/abstention, human disposition, bounded jobs, audit provenance, exact-context reuse, correction/revocation, offline evaluation, and a staged pilot.
 
@@ -261,7 +261,7 @@ Before coding, settle:
 - Provider/model/version strategy, token/latency/cost limits, retry policy, and TTL/freshness boundaries; owner: engineering owner.
 - Dataset adequacy, numerical quality targets, minimum sample sizes, independent review, pilot design, and rollback thresholds; owner: product and evaluation owners.
 
-These are entry gates for the future phase, not requests to block current v1 development. The original project specification remains authoritative until explicitly extended for Phase 8.
+These are entry gates for the future phase, not requests to block current v1 development. The original project specification remains authoritative until explicitly extended for Phase 12B.
 
 ## Methodology and limits
 
@@ -269,4 +269,4 @@ Investigated five questions: how severity should be grounded in impact; how revi
 
 The report cites 19 primary sources: official technical/incident-response guidance, original research publications, and NIST's attack taxonomy. Key cache, RLS, structured-output, incident-rubric, and security guidance was read beyond search snippets. Older research is included for established failure mechanisms; model-specific historical benchmark results are not extrapolated into current product accuracy. Instruction-like strings encountered in security publications were attack examples and were treated only as source data.
 
-No live incident data was uploaded and no model benchmark was run for this planning work. There is insufficient evidence to choose a best provider/model, promise a cache hit rate, quantify accuracy gains, or claim a safe universal threshold. Those uncertainties are carried into the Phase 8 entry and release gates rather than presented as validated results.
+No live incident data was uploaded and no model benchmark was run for this planning work. There is insufficient evidence to choose a best provider/model, promise a cache hit rate, quantify accuracy gains, or claim a safe universal threshold. Those uncertainties are carried into the Phase 12B entry and release gates rather than presented as validated results.
