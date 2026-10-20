@@ -8,7 +8,8 @@ const commonSecurityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+    value:
+      "camera=(), microphone=(), geolocation=(), payment=(), usb=(), tools=(self)",
   },
 ];
 

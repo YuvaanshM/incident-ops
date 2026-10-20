@@ -1,0 +1,25 @@
+title = "Incident Ops secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Exact public synthetic values in the alert authentication unit tests"
+condition = "AND"
+paths = ['''(^|/)apps/api/tests/unit/test_alert_signature\.py$''']
+regexTarget = "secret"
+regexes = [
+  '''^synthetic-primary-signing-secret-123$''',
+  '''^synthetic-secret-one-123456789$''',
+  '''^synthetic-secret-two-123456789$''',
+]
+
+[[rules.allowlists]]
+description = "Exact Phase 8 test-report prose misidentified as a key"
+condition = "AND"
+paths = ['''(^|/)docs/tdd/phase-8-alert-foundation\.tdd\.md$''']
+regexTarget = "secret"
+regexes = ['''^disabled/unknown$''']

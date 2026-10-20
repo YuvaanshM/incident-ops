@@ -44,7 +44,9 @@ async def test_upgrade_downgrade_upgrade_cycle_is_deterministic(
         "action_requests",
         "demo_jobs",
         "historical_incidents",
+        "historical_ingestion_events",
         "idempotency_records",
+        "investigation_runs",
         "incident_events",
         "incidents",
         "outbox_events",
@@ -83,7 +85,9 @@ async def test_pgvector_and_forced_rls_are_enabled(database_engine) -> None:
                     "action_requests",
                     "demo_jobs",
                     "historical_incidents",
+                    "historical_ingestion_events",
                     "idempotency_records",
+                    "investigation_runs",
                     "incident_events",
                     "incidents",
                     "outbox_events",
@@ -107,9 +111,11 @@ async def test_pgvector_and_forced_rls_are_enabled(database_engine) -> None:
         "alerts",
         "demo_jobs",
         "historical_incidents",
+        "historical_ingestion_events",
         "idempotency_records",
         "incident_events",
         "incidents",
+        "investigation_runs",
         "outbox_events",
     ]
     assert all(
@@ -122,6 +128,12 @@ async def test_all_named_constraints_and_restrictive_foreign_keys_exist(
     database_engine,
 ) -> None:
     expected_checks = {
+        "investigation_runs": {
+            "ck_investigation_owner",
+            "ck_investigation_versions",
+            "ck_investigation_deadline",
+            "ck_investigation_outcome",
+        },
         "incidents": {
             "ck_incidents_title",
             "ck_incidents_description",
@@ -192,7 +204,16 @@ async def test_all_named_constraints_and_restrictive_foreign_keys_exist(
             "ck_demo_jobs_error",
             "ck_demo_jobs_timestamp_order",
         },
+        "historical_ingestion_events": {
+            "ck_historical_events_version",
+            "ck_historical_events_hash",
+            "ck_historical_events_actor",
+        },
         "historical_incidents": {
+            "ck_historical_version",
+            "ck_historical_hash",
+            "ck_historical_provenance",
+            "ck_historical_template",
             "ck_historical_source_id",
             "ck_historical_title",
             "ck_historical_description",
@@ -247,8 +268,10 @@ async def test_all_named_constraints_and_restrictive_foreign_keys_exist(
                     "alert_events",
                     "demo_jobs",
                     "historical_incidents",
+                    "historical_ingestion_events",
                     "outbox_events",
                     "idempotency_records",
+                    "investigation_runs",
                 )
                 for constraint in inspect(sync_connection).get_unique_constraints(table_name)
             }
@@ -267,6 +290,7 @@ async def test_all_named_constraints_and_restrictive_foreign_keys_exist(
                     "alert_events",
                     "demo_jobs",
                     "incident_events",
+                    "investigation_runs",
                     "outbox_events",
                 ],
             ),
@@ -280,6 +304,7 @@ async def test_all_named_constraints_and_restrictive_foreign_keys_exist(
         "uq_demo_jobs_incident_stable_key",
         "uq_historical_source_id",
         "uq_idempotency_principal_operation_key",
+        "uq_investigation_principal_key",
         "uq_outbox_dedupe_key",
     }
     foreign_key_rows = foreign_key_actions.all()

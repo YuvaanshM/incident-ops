@@ -234,6 +234,9 @@ coverage/
 playwright-report/
 test-results/
 
+# macOS metadata
+.DS_Store
+
 # Local environment files (the documented template is safe to commit)
 .env.local
 .env.*.local

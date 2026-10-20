@@ -24,7 +24,7 @@ class StatusUpdateParameters(StrictSchema):
 
 
 class ActionRequestCreate(StrictSchema):
-    expected_incident_version: int = Field(ge=1)
+    expected_incident_version: int = Field(ge=1, le=2_147_483_647, strict=True)
     action_type: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)
     ]
@@ -51,6 +51,10 @@ class ActionRequestCreate(StrictSchema):
 
 class ActionReject(StrictSchema):
     reason: Rationale | None = None
+
+
+class DemoJobAttach(StrictSchema):
+    expected_incident_version: int = Field(ge=1, strict=True)
 
 
 class ActionResponse(StrictSchema):

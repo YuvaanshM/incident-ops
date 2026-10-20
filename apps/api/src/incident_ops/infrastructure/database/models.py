@@ -433,6 +433,16 @@ class HistoricalIncidentModel(TimestampMixin, Base):
             name="ck_historical_embedding_model",
         ),
         CheckConstraint("updated_at >= created_at", name="ck_historical_timestamp_order"),
+        CheckConstraint("version >= 1", name="ck_historical_version"),
+        CheckConstraint(
+            "content_hash IS NULL OR content_hash ~ '^[0-9a-f]{64}$'", name="ck_historical_hash"
+        ),
+        CheckConstraint(
+            "provenance IN ('unreviewed', 'seeded_demo_data')", name="ck_historical_provenance"
+        ),
+        CheckConstraint(
+            "char_length(embedding_template) BETWEEN 1 AND 100", name="ck_historical_template"
+        ),
         UniqueConstraint("source_id", name="uq_historical_source_id"),
         Index(
             "ix_historical_embedding_corpus",
@@ -447,6 +457,14 @@ class HistoricalIncidentModel(TimestampMixin, Base):
     id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
+    version: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"))
+    content_hash: Mapped[str | None] = mapped_column(String(64))
+    provenance: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default=text("'unreviewed'")
+    )
+    embedding_template: Mapped[str] = mapped_column(
+        String(100), nullable=False, server_default=text("'legacy'")
+    )
     source_id: Mapped[str] = mapped_column(String(100), nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
@@ -457,6 +475,35 @@ class HistoricalIncidentModel(TimestampMixin, Base):
     embedding_provider: Mapped[str] = mapped_column(String(100), nullable=False)
     embedding_model: Mapped[str] = mapped_column(String(200), nullable=False)
     embedding: Mapped[list[float]] = mapped_column(Vector(1536), nullable=False)
+
+
+class HistoricalIngestionEventModel(Base):
+    __tablename__ = "historical_ingestion_events"
+    __table_args__ = (
+        CheckConstraint("version >= 1", name="ck_historical_events_version"),
+        CheckConstraint("content_hash ~ '^[0-9a-f]{64}$'", name="ck_historical_events_hash"),
+        CheckConstraint(
+            "actor_type = 'system' AND actor_id = 'historical-fixture-loader'",
+            name="ck_historical_events_actor",
+        ),
+    )
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    historical_id: Mapped[UUID] = mapped_column(
+        ForeignKey("historical_incidents.id", ondelete="RESTRICT"), nullable=False
+    )
+    idempotency_key: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    actor_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    version: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    embedding_provider: Mapped[str] = mapped_column(String(100), nullable=False)
+    embedding_model: Mapped[str] = mapped_column(String(200), nullable=False)
+    embedding_template: Mapped[str] = mapped_column(String(100), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class OutboxEventModel(TimestampMixin, Base):
@@ -584,3 +631,32 @@ class IdempotencyRecordModel(TimestampMixin, Base):
     resource_type: Mapped[str | None] = mapped_column(String(50))
     resource_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class InvestigationRunModel(TimestampMixin, Base):
+    __tablename__ = "investigation_runs"
+    __table_args__ = (
+        UniqueConstraint("principal_id", "request_key", name="uq_investigation_principal_key"),
+        CheckConstraint(
+            "char_length(principal_id) BETWEEN 1 AND 255", name="ck_investigation_owner"
+        ),
+        CheckConstraint(
+            "version IN (1, 2) AND incident_version >= 1", name="ck_investigation_versions"
+        ),
+        CheckConstraint("deadline > created_at", name="ck_investigation_deadline"),
+        CheckConstraint("jsonb_typeof(outcome) = 'object'", name="ck_investigation_outcome"),
+        Index("ix_investigation_owner_deadline", "principal_id", "deadline"),
+    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    principal_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    request_key: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    incident_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("incidents.id", ondelete="RESTRICT"), nullable=False
+    )
+    incident_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    model: Mapped[str] = mapped_column(String(100), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    outcome: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)

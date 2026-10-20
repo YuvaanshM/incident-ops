@@ -14,8 +14,10 @@ their lengths match.
 ## Decision
 
 - Store historical-incident embeddings as `vector(1536)`.
-- Keep embedding generation behind an application port with OpenAI and Google
-  adapters introduced in the retrieval phase.
+- Keep embedding generation behind an application port. Phase 11A implements
+  OpenAI `text-embedding-3-small` at 1,536 dimensions and an explicitly labelled
+  deterministic local demo provider. A Google adapter is deferred; switching
+  providers still requires complete corpus re-embedding.
 - Record the embedding provider and exact model beside every vector. Retrieval
   filters to the configured provider/model and refuses a mixed corpus.
 - Re-embed the complete small corpus when changing embedding models.

@@ -1,4 +1,6 @@
 import type { components } from "@incident-ops/api-client";
+export type InvestigationResult =
+  components["schemas"]["InvestigationResponse"];
 
 export type Incident = components["schemas"]["IncidentResponse"];
 export type IncidentCreate = components["schemas"]["IncidentCreate"];
@@ -21,3 +23,6 @@ export interface IncidentFilters {
   severity?: IncidentSeverity;
   status?: IncidentStatus;
 }
+
+export type RemediationResult = components["schemas"]["RemediationResponse"];
+export type HistoricalSource = components["schemas"]["HistoricalSource"];

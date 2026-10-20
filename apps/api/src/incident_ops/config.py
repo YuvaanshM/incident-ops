@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     )
     development_auth_enabled: bool = False
 
+    agent_tokens_enabled: bool = False
     agent_token_issuer: str | None = Field(default=None, max_length=200)
     agent_token_audience: str | None = Field(default=None, max_length=200)
     agent_token_signing_key: SecretStr | None = None
@@ -51,8 +52,15 @@ class Settings(BaseSettings):
     slack_webhook_url: SecretStr | None = None
     slack_intake: SlackIntakeSettings = Field(default_factory=SlackIntakeSettings)
     alert_intake: AlertIntakeSettings = Field(default_factory=AlertIntakeSettings)
-    embedding_provider: str = Field(default="disabled", min_length=1, max_length=100)
+    embedding_provider: Literal["disabled", "deterministic", "openai"] = "disabled"
+    embedding_api_key: SecretStr | None = None
+    embedding_allow_external_processing: bool = False
     embedding_model: str | None = Field(default=None, max_length=200)
+    investigation_enabled: bool = False
+    investigation_api_key: SecretStr | None = None
+    investigation_model: Literal["gpt-5.4-mini-2026-03-17"] = "gpt-5.4-mini-2026-03-17"
+    investigation_synthetic_data_confirmed: bool = False
+    investigation_evaluation_passed: bool = False
     allow_development_reset: bool = False
 
     @field_validator(
@@ -64,6 +72,8 @@ class Settings(BaseSettings):
         "agent_token_signing_key",
         "slack_webhook_url",
         "embedding_model",
+        "embedding_api_key",
+        "investigation_api_key",
         mode="before",
     )
     @classmethod
@@ -89,6 +99,73 @@ class Settings(BaseSettings):
         if not value or any(not host.strip() or host == "*" for host in value):
             raise ValueError("ALLOWED_HOSTS must be a non-empty explicit allowlist")
         return value
+
+    @model_validator(mode="after")
+    def validate_embedding_configuration(self) -> Self:
+        models = {"deterministic": "hash-bow-v1", "openai": "text-embedding-3-small"}
+        if self.embedding_provider == "disabled":
+            return self
+        if self.embedding_model != models[self.embedding_provider]:
+            raise ValueError("embedding provider and exact model must match")
+        if self.embedding_provider == "openai" and (
+            self.embedding_api_key is None or not self.embedding_allow_external_processing
+        ):
+            raise ValueError("external embeddings require credentials and approved data processing")
+        if self.embedding_api_key is not None:
+            key = self.embedding_api_key.get_secret_value()
+            if (
+                not 1 <= len(key.encode()) <= 4096
+                or not key.isascii()
+                or not key.isprintable()
+                or key.strip() != key
+            ):
+                raise ValueError("embedding credential must contain bounded printable bytes")
+        return self
+
+    @model_validator(mode="after")
+    def validate_investigation_configuration(self) -> Self:
+        if self.investigation_api_key is not None:
+            key = self.investigation_api_key.get_secret_value()
+            if (
+                not 1 <= len(key.encode()) <= 4096
+                or not key.isascii()
+                or not key.isprintable()
+                or key.strip() != key
+            ):
+                raise ValueError("investigation credential must contain bounded printable bytes")
+        if self.investigation_enabled and (
+            self.app_env == "production"
+            or not self.agent_tokens_enabled
+            or self.investigation_api_key is None
+            or not self.investigation_synthetic_data_confirmed
+            or not self.investigation_evaluation_passed
+        ):
+            raise ValueError(
+                "investigation requires a synthetic non-production deployment, agent credentials, "
+                "provider credentials and passed evaluation"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_agent_credentials(self) -> Self:
+        if not self.agent_tokens_enabled:
+            return self
+        if (
+            not self.agent_token_issuer
+            or not self.agent_token_audience
+            or not self.agent_token_signing_key
+        ):
+            raise ValueError("enabled agent credentials require issuer, audience and signing key")
+        key = self.agent_token_signing_key.get_secret_value()
+        if not 32 <= len(key.encode()) <= 4096 or not key.isprintable():
+            raise ValueError("agent signing key must contain 32 to 4096 printable bytes")
+        if self.oidc_issuer_url and self.agent_token_issuer.rstrip("/") == str(
+            self.oidc_issuer_url
+        ).rstrip("/"):
+            raise ValueError("agent issuer must be distinct from the human issuer")
+        if self.agent_token_audience == self.oidc_audience:
+            raise ValueError("agent audience must be distinct from the human audience")
+        return self
 
     @model_validator(mode="after")
     def reject_unsafe_production_configuration(self) -> Self:

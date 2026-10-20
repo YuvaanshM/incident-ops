@@ -2,7 +2,7 @@ SHELL := /bin/sh
 PNPM := corepack pnpm
 UV := uv
 
-.PHONY: bootstrap dev-db test-db dev-api dev-web dev-worker migrate migration-check export-openapi generate-api-client api-client-check test test-integration lint typecheck check seed down
+.PHONY: bootstrap dev-db test-db dev-api dev-web dev-worker migrate migration-check export-openapi generate-api-client api-client-check test test-integration test-agent lint typecheck check seed down
 
 bootstrap:
 	$(UV) sync --project apps/api --all-groups --locked
@@ -46,6 +46,9 @@ test:
 
 test-integration: test-db
 	$(UV) run --project apps/api pytest apps/api/tests/integration
+
+test-agent: test-db
+	$(PNPM) --filter @incident-ops/web exec playwright test --config playwright.agent.config.ts
 
 lint:
 	$(UV) run --project apps/api ruff check apps/api

@@ -5,7 +5,11 @@ const auth = vi.hoisted(() => ({ getAccessToken: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth0", () => ({ auth0: auth }));
 
-import { forwardMutation, forwardQuery } from "@/lib/api/server";
+import {
+  forwardMutation,
+  forwardQuery,
+  forwardAdvisoryQuery,
+} from "@/lib/api/server";
 
 describe("server-side API transport", () => {
   beforeEach(() => {
@@ -83,4 +87,40 @@ describe("server-side API transport", () => {
     expect((await response.json()).error.code).toBe("csrf_rejected");
     expect(upstream).not.toHaveBeenCalled();
   });
+});
+
+it("requires same-origin intent for an advisory POST without granting mutation authority", async () => {
+  vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("APP_BASE_URL", "https://app.example");
+  auth.getAccessToken.mockResolvedValue({
+    token: "verified-hosted-access-token",
+  });
+  const fetcher = vi.fn().mockResolvedValue(Response.json({ advisory: true }));
+  vi.stubGlobal("fetch", fetcher);
+  const path =
+    "/api/v1/incidents/10000000-0000-4000-8000-000000000001/remediation-suggestions";
+  const makeRequest = (origin: string) =>
+    new Request("https://app.example/api/ui/query", {
+      method: "POST",
+      headers: {
+        Origin: origin,
+        "X-Incident-Ops-Intent": "human-query",
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+    });
+  expect(
+    (await forwardAdvisoryQuery(makeRequest("https://evil.example"), path))
+      .status,
+  ).toBe(403);
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(
+    (await forwardAdvisoryQuery(makeRequest("https://app.example"), path))
+      .status,
+  ).toBe(200);
+  expect(
+    new Headers(fetcher.mock.calls[0]![1].headers).has("Idempotency-Key"),
+  ).toBe(false);
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });

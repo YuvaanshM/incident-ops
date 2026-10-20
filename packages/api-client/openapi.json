@@ -60,6 +60,7 @@
             "type": "string"
           },
           "expected_incident_version": {
+            "maximum": 2147483647.0,
             "minimum": 1.0,
             "title": "Expected Incident Version",
             "type": "integer"
@@ -261,6 +262,13 @@
         "title": "ActionStatus",
         "type": "string"
       },
+      "AgentSessionRequest": {
+        "additionalProperties": false,
+        "description": "No caller-controlled permissions or identities.",
+        "properties": {},
+        "title": "AgentSessionRequest",
+        "type": "object"
+      },
       "AlertEventResponse": {
         "additionalProperties": false,
         "properties": {
@@ -371,6 +379,21 @@
         "title": "AlertListResponse",
         "type": "object"
       },
+      "DemoJobAttach": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_incident_version": {
+            "minimum": 1.0,
+            "title": "Expected Incident Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_incident_version"
+        ],
+        "title": "DemoJobAttach",
+        "type": "object"
+      },
       "DemoJobResponse": {
         "additionalProperties": false,
         "properties": {
@@ -441,6 +464,29 @@
         "title": "DemoJobResponse",
         "type": "object"
       },
+      "Finding": {
+        "additionalProperties": false,
+        "properties": {
+          "quote": {
+            "maxLength": 400,
+            "minLength": 8,
+            "title": "Quote",
+            "type": "string"
+          },
+          "source_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "quote"
+        ],
+        "title": "Finding",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -452,6 +498,71 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HistoricalSource": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "provenance": {
+            "const": "seeded_demo_data",
+            "default": "seeded_demo_data",
+            "title": "Provenance",
+            "type": "string"
+          },
+          "resolution_steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Resolution Steps",
+            "type": "array"
+          },
+          "resolution_summary": {
+            "title": "Resolution Summary",
+            "type": "string"
+          },
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "source_incident_id": {
+            "format": "uuid",
+            "title": "Source Incident Id",
+            "type": "string"
+          },
+          "source_version": {
+            "title": "Source Version",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_incident_id",
+          "source_version",
+          "title",
+          "description",
+          "service",
+          "severity",
+          "resolution_summary",
+          "resolution_steps"
+        ],
+        "title": "HistoricalSource",
         "type": "object"
       },
       "IncidentCreate": {
@@ -799,6 +910,180 @@
         "title": "IncidentUpdate",
         "type": "object"
       },
+      "InvestigationOutcome": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/Finding"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "input_tokens": {
+            "default": 0,
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "default": 0,
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "reserved_cost_microusd": {
+            "default": 0,
+            "title": "Reserved Cost Microusd",
+            "type": "integer"
+          },
+          "reserved_tokens": {
+            "default": 0,
+            "title": "Reserved Tokens",
+            "type": "integer"
+          },
+          "status": {
+            "default": "running",
+            "enum": [
+              "running",
+              "completed",
+              "stopped",
+              "cancelled",
+              "interrupted"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "trace": {
+            "items": {
+              "$ref": "#/components/schemas/TraceStep"
+            },
+            "title": "Trace",
+            "type": "array"
+          }
+        },
+        "title": "InvestigationOutcome",
+        "type": "object"
+      },
+      "InvestigationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_action_requests": {
+            "default": false,
+            "title": "Allow Action Requests",
+            "type": "boolean"
+          },
+          "expected_incident_version": {
+            "maximum": 2147483647.0,
+            "minimum": 1.0,
+            "title": "Expected Incident Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_incident_version"
+        ],
+        "title": "InvestigationRequest",
+        "type": "object"
+      },
+      "InvestigationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "action_request_key": {
+            "format": "uuid",
+            "title": "Action Request Key",
+            "type": "string"
+          },
+          "deadline": {
+            "format": "date-time",
+            "title": "Deadline",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "incident_id": {
+            "format": "uuid",
+            "title": "Incident Id",
+            "type": "string"
+          },
+          "incident_version": {
+            "title": "Incident Version",
+            "type": "integer"
+          },
+          "limits": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "title": "Limits",
+            "type": "object"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/InvestigationOutcome"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "incident_id",
+          "incident_version",
+          "version",
+          "action_request_key",
+          "provider",
+          "model",
+          "prompt_version",
+          "deadline",
+          "outcome",
+          "limits"
+        ],
+        "title": "InvestigationResponse",
+        "type": "object"
+      },
       "LivenessResponse": {
         "additionalProperties": false,
         "properties": {
@@ -909,6 +1194,194 @@
         "title": "ReadinessResponse",
         "type": "object"
       },
+      "RemediationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "advisory": {
+            "const": true,
+            "default": true,
+            "title": "Advisory",
+            "type": "boolean"
+          },
+          "incident_id": {
+            "format": "uuid",
+            "title": "Incident Id",
+            "type": "string"
+          },
+          "incident_version": {
+            "title": "Incident Version",
+            "type": "integer"
+          },
+          "provenance": {
+            "const": "seeded_demo_data",
+            "default": "seeded_demo_data",
+            "title": "Provenance",
+            "type": "string"
+          },
+          "retrieval_mode": {
+            "enum": [
+              "deterministic_demo",
+              "semantic"
+            ],
+            "title": "Retrieval Mode",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "matched",
+              "no_matches",
+              "empty_corpus"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/RemediationSuggestion"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "incident_id",
+          "incident_version",
+          "retrieval_mode",
+          "status",
+          "suggestions"
+        ],
+        "title": "RemediationResponse",
+        "type": "object"
+      },
+      "RemediationSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "provenance": {
+            "const": "seeded_demo_data",
+            "default": "seeded_demo_data",
+            "title": "Provenance",
+            "type": "string"
+          },
+          "resolution_steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Resolution Steps",
+            "type": "array"
+          },
+          "resolution_summary": {
+            "title": "Resolution Summary",
+            "type": "string"
+          },
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "similarity_score": {
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "title": "Similarity Score",
+            "type": "number"
+          },
+          "source_incident_id": {
+            "format": "uuid",
+            "title": "Source Incident Id",
+            "type": "string"
+          },
+          "source_version": {
+            "title": "Source Version",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_incident_id",
+          "source_version",
+          "title",
+          "description",
+          "service",
+          "severity",
+          "resolution_summary",
+          "resolution_steps",
+          "similarity_score"
+        ],
+        "title": "RemediationSuggestion",
+        "type": "object"
+      },
+      "RetrievalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 3,
+            "maximum": 5.0,
+            "minimum": 3.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          },
+          "service": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high",
+                  "critical"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity"
+          }
+        },
+        "title": "RetrievalRequest",
+        "type": "object"
+      },
       "SeverityRecommendationResponse": {
         "additionalProperties": false,
         "properties": {
@@ -962,6 +1435,32 @@
           "next_cursor"
         ],
         "title": "TimelineResponse",
+        "type": "object"
+      },
+      "TraceStep": {
+        "additionalProperties": false,
+        "properties": {
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Ids",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool",
+          "status"
+        ],
+        "title": "TraceStep",
         "type": "object"
       },
       "ValidationError": {
@@ -1132,6 +1631,54 @@
           }
         ],
         "summary": "List Actions",
+        "tags": [
+          "actions"
+        ]
+      }
+    },
+    "/api/v1/actions/by-request/{idempotency_key}": {
+      "get": {
+        "operationId": "get_requested_action_api_v1_actions_by_request__idempotency_key__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "idempotency_key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Idempotency Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Requested Action",
         "tags": [
           "actions"
         ]
@@ -1311,6 +1858,118 @@
         ]
       }
     },
+    "/api/v1/agent-sessions": {
+      "post": {
+        "operationId": "exchange_agent_session_api_v1_agent_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Exchange Agent Session",
+        "tags": [
+          "agent authentication"
+        ]
+      }
+    },
+    "/api/v1/demo/incidents/{incident_id}/job": {
+      "post": {
+        "operationId": "attach_demo_job_api_v1_demo_incidents__incident_id__job_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "incident_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Incident Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoJobAttach"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoJobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Attach Demo Job",
+        "tags": [
+          "demo"
+        ]
+      }
+    },
     "/api/v1/demo/jobs/{job_id}/simulate-failure": {
       "post": {
         "operationId": "simulate_job_failure_api_v1_demo_jobs__job_id__simulate_failure_post",
@@ -1366,6 +2025,54 @@
         "summary": "Simulate Job Failure",
         "tags": [
           "demo"
+        ]
+      }
+    },
+    "/api/v1/historical-incidents/{source_id}": {
+      "get": {
+        "operationId": "historical_source_api_v1_historical_incidents__source_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoricalSource"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Historical Source",
+        "tags": [
+          "retrieval"
         ]
       }
     },
@@ -1821,6 +2528,74 @@
         ]
       }
     },
+    "/api/v1/incidents/{incident_id}/investigations": {
+      "post": {
+        "operationId": "investigate_api_v1_incidents__incident_id__investigations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "incident_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Incident Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvestigationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestigationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Investigate",
+        "tags": [
+          "investigations"
+        ]
+      }
+    },
     "/api/v1/incidents/{incident_id}/postmortem-draft": {
       "post": {
         "operationId": "postmortem_draft_api_v1_incidents__incident_id__postmortem_draft_post",
@@ -1866,6 +2641,64 @@
         "summary": "Postmortem Draft",
         "tags": [
           "incidents"
+        ]
+      }
+    },
+    "/api/v1/incidents/{incident_id}/remediation-suggestions": {
+      "post": {
+        "operationId": "suggest_remediation_api_v1_incidents__incident_id__remediation_suggestions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "incident_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Incident Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetrievalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemediationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Suggest Remediation",
+        "tags": [
+          "retrieval"
         ]
       }
     },
@@ -1992,6 +2825,54 @@
         "summary": "Get Timeline",
         "tags": [
           "incidents"
+        ]
+      }
+    },
+    "/api/v1/investigations/by-request/{key}": {
+      "get": {
+        "operationId": "recover_investigation_api_v1_investigations_by_request__key__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestigationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Recover Investigation",
+        "tags": [
+          "investigations"
         ]
       }
     },

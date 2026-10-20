@@ -30,6 +30,7 @@ def openapi_document(test_settings: Settings) -> dict[str, object]:
         ("/api/v1/actions/{action_id}/approve", "post"),
         ("/api/v1/actions/{action_id}/reject", "post"),
         ("/api/v1/demo/jobs/{job_id}/simulate-failure", "post"),
+        ("/api/v1/demo/incidents/{incident_id}/job", "post"),
     ],
 )
 def test_mutations_publish_required_idempotency_header(
@@ -63,7 +64,13 @@ def test_command_schemas_reject_unknown_top_level_fields(
     schemas = components["schemas"]
     assert isinstance(schemas, Mapping)
 
-    for name in ("IncidentCreate", "IncidentUpdate", "ActionRequestCreate", "ActionReject"):
+    for name in (
+        "IncidentCreate",
+        "IncidentUpdate",
+        "ActionRequestCreate",
+        "ActionReject",
+        "DemoJobAttach",
+    ):
         schema = schemas[name]
         assert isinstance(schema, Mapping)
         assert schema["additionalProperties"] is False
@@ -99,3 +106,4 @@ def test_operation_ids_are_unique_and_demo_runner_is_documented_only_for_develop
     )
     production_paths = create_app(production_settings).openapi()["paths"]
     assert "/api/v1/demo/jobs/{job_id}/simulate-failure" not in production_paths
+    assert "/api/v1/demo/incidents/{incident_id}/job" not in production_paths

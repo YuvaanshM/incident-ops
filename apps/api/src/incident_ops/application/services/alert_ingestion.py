@@ -141,6 +141,7 @@ class AlertIngestionService:
                 return replay, True
 
             current = await uow.alerts.lock_identity(*alert.logical_identity)
+            await self._observer.reached("alert.ingest.before_incident_lock")
             incident = None
             if current is not None and current.incident_id is not None:
                 incident = await uow.incidents.get(current.incident_id, for_update=True)

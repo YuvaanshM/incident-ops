@@ -6,7 +6,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from incident_ops.application.auth import Principal, require_actor_type
+from incident_ops.application.auth import Principal, require_actor_type, require_scope
 from incident_ops.application.dto import (
     ActionRequestView,
     CommandResult,
@@ -30,6 +30,7 @@ from incident_ops.domain.enums import (
 )
 from incident_ops.domain.errors import (
     ActionNotPendingError,
+    AuthorizationDeniedError,
     IncidentOpsError,
     InvalidActionParametersError,
     ResourceNotFoundError,
@@ -39,9 +40,18 @@ from incident_ops.domain.incidents import transition_lifecycle
 from incident_ops.domain.policies import ActionPolicyInput, evaluate_action_policy
 from incident_ops.infrastructure.database.unit_of_work import SqlAlchemyUnitOfWork
 
-_REQUEST_INTERNAL_SCOPES = frozenset({"incidents:read", "actions:execute"})
+# SELECT FOR UPDATE must also satisfy the incident UPDATE RLS policy. This
+# transaction-local scope is granted only after actions:request authorization;
+# it is never added to the caller's token or exposed as a general mutation API.
+_REQUEST_INTERNAL_SCOPES = frozenset({"incidents:read", "incidents:write", "actions:execute"})
 _REVIEW_INTERNAL_SCOPES = frozenset({"incidents:read", "incidents:write", "actions:execute"})
 _DEMO_INTERNAL_SCOPES = frozenset({"incidents:read", "actions:execute"})
+
+
+def _require_operator(principal: Principal, scope: str) -> None:
+    if principal.actor_type not in (ActorType.HUMAN, ActorType.AGENT):
+        raise AuthorizationDeniedError()
+    require_scope(principal, scope)
 
 
 def _replay_result(reservation: IdempotencyReservation) -> CommandResult | None:
@@ -58,7 +68,20 @@ class ActionQueryService:
     def __init__(self, engine: AsyncEngine) -> None:
         self._engine = engine
 
+    async def get_requested_action(
+        self, *, principal: Principal, idempotency_key: UUID
+    ) -> ActionRequestView:
+        _require_operator(principal, "actions:request")
+        async with SqlAlchemyUnitOfWork(self._engine, principal=principal) as uow:
+            action = await uow.actions.get_for_request(
+                principal=principal, idempotency_key=idempotency_key
+            )
+        if action is None:
+            raise ResourceNotFoundError()
+        return action
+
     async def get_action(self, *, principal: Principal, action_id: UUID) -> ActionRequestView:
+        _require_operator(principal, "incidents:read")
         async with SqlAlchemyUnitOfWork(self._engine, principal=principal) as uow:
             action = await uow.actions.get(action_id)
         if action is None:
@@ -75,6 +98,8 @@ class ActionQueryService:
         cursor: str | None,
         limit: int,
     ) -> Page:
+        require_actor_type(principal, ActorType.HUMAN)
+        require_scope(principal, "actions:approve")
         cursor_timestamp = None
         cursor_id = None
         if cursor is not None:
@@ -108,9 +133,11 @@ class ActionCommandService:
         engine: AsyncEngine,
         *,
         observer: CommandObserver | None = None,
+        demo_enabled: bool = False,
     ) -> None:
         self._engine = engine
         self._observer = observer or NullCommandObserver()
+        self._demo_enabled = demo_enabled
 
     async def request_action(
         self,
@@ -124,6 +151,7 @@ class ActionCommandService:
         parameters: Mapping[str, object],
         rationale: str | None,
     ) -> CommandResult:
+        _require_operator(principal, "actions:request")
         fingerprint = canonical_request_fingerprint(
             operation="actions.request",
             path_parameters={"incident_id": incident_id},
@@ -175,7 +203,7 @@ class ActionCommandService:
             job = None
             if definition.action_type is ActionType.RETRY_FAILED_JOB:
                 raw_job_id = parameters.get("job_id")
-                if not isinstance(raw_job_id, UUID):
+                if set(parameters) != {"job_id"} or not isinstance(raw_job_id, UUID):
                     return await self._complete_error(
                         uow, reservation, InvalidActionParametersError()
                     )
@@ -191,10 +219,17 @@ class ActionCommandService:
                 }
             else:
                 target_status = parameters.get("target_status")
-                if not isinstance(target_status, IncidentStatus):
+                if set(parameters) != {"target_status"} or not isinstance(
+                    target_status, IncidentStatus
+                ):
                     return await self._complete_error(
                         uow, reservation, InvalidActionParametersError()
                     )
+                if (
+                    target_status is IncidentStatus.CLOSED
+                    and principal.actor_type is not ActorType.HUMAN
+                ):
+                    return await self._complete_error(uow, reservation, AuthorizationDeniedError())
                 now = await uow.incidents.database_now()
                 try:
                     transition_lifecycle(
@@ -212,6 +247,7 @@ class ActionCommandService:
                 ActionPolicyInput(
                     action_type=definition.action_type,
                     incident_severity=IncidentSeverity(incident.severity),
+                    incident_status=IncidentStatus(incident.status),
                     requested_by=principal.actor_type,
                     parameters_valid=True,
                     retry_count=retry_count,
@@ -362,6 +398,7 @@ class ActionCommandService:
         request_id: UUID,
     ) -> CommandResult:
         require_actor_type(principal, ActorType.HUMAN)
+        require_scope(principal, "actions:approve")
         return await self._review_action(
             principal=principal,
             action_id=action_id,
@@ -381,6 +418,7 @@ class ActionCommandService:
         reason: str | None,
     ) -> CommandResult:
         require_actor_type(principal, ActorType.HUMAN)
+        require_scope(principal, "actions:approve")
         return await self._review_action(
             principal=principal,
             action_id=action_id,
@@ -465,6 +503,13 @@ class ActionCommandService:
                     "incident_version_changed",
                 )
 
+            # Ingestion locks its alert before this incident row. Holding the
+            # incident lock makes a plain alert read stable until we commit;
+            # locking alerts here would invert that order and risk deadlock.
+            await self._observer.reached("action.review.after_incident_lock")
+            definition = get_action_definition(action.action_type)
+            job = None
+
             if action.action_type == ActionType.RETRY_FAILED_JOB.value:
                 job_id = UUID(str(action.parameters["job_id"]))
                 expected_job_version = action.parameters.get("expected_job_version")
@@ -484,6 +529,29 @@ class ActionCommandService:
                         request_id,
                         "job_state_changed",
                     )
+
+            policy = evaluate_action_policy(
+                ActionPolicyInput(
+                    action_type=definition.action_type,
+                    incident_severity=IncidentSeverity(incident.severity),
+                    incident_status=IncidentStatus(incident.status),
+                    requested_by=ActorType(action.requested_by_type),
+                    parameters_valid=True,
+                    retry_count=0 if job is None else job.retry_count,
+                    higher_monitoring_risk=await uow.alerts.has_higher_firing_risk(
+                        incident.id, incident.severity
+                    ),
+                )
+            )
+            if (
+                policy.policy_version != action.policy_version
+                or policy.decision is PolicyDecision.REJECT
+            ):
+                return await self._mark_stale(
+                    uow, reservation, action, principal, request_id, "policy_changed"
+                )
+
+            if job is not None:
                 queued = await uow.jobs.queue_failed(
                     job_id=job.id,
                     incident_id=action.incident_id,
@@ -556,7 +624,12 @@ class ActionCommandService:
                 event_type="action.approved",
                 principal=principal,
                 request_id=request_id,
-                payload={"action_type": action.action_type},
+                payload={
+                    "action_type": action.action_type,
+                    "revalidated_policy": policy.snapshot,
+                    "incident_version": incident.version,
+                    "job_version": None if job is None else job.version,
+                },
             )
             finalized = await uow.actions.finalize(
                 action_id=action.id,
@@ -575,7 +648,85 @@ class ActionCommandService:
                 request_id=request_id,
                 payload={"outcome_code": outcome_code},
             )
+            await self._observer.reached("action.review.after_event")
             return await self._complete_action(uow, reservation, finalized)
+
+    async def attach_demo_job(
+        self,
+        *,
+        principal: Principal,
+        incident_id: UUID,
+        expected_incident_version: int,
+        idempotency_key: UUID,
+        request_id: UUID,
+    ) -> CommandResult:
+        """Explicitly attach one fixed synthetic job without resetting prior retries."""
+        require_actor_type(principal, ActorType.HUMAN)
+        require_scope(principal, "fixtures:write")
+        if not self._demo_enabled:
+            raise ResourceNotFoundError()
+        if type(expected_incident_version) is not int or expected_incident_version < 1:
+            raise InvalidActionParametersError()
+        fingerprint = canonical_request_fingerprint(
+            operation="demo_jobs.attach",
+            path_parameters={"incident_id": incident_id},
+            body={"expected_incident_version": expected_incident_version},
+        )
+        async with SqlAlchemyUnitOfWork(
+            self._engine,
+            principal=principal,
+            trusted_scopes=_DEMO_INTERNAL_SCOPES | {"incidents:write"},
+        ) as uow:
+            reservation = await uow.idempotency.reserve(
+                principal=principal,
+                operation="demo_jobs.attach",
+                key=idempotency_key,
+                fingerprint=fingerprint,
+            )
+            replay = _replay_result(reservation)
+            if replay is not None:
+                await uow.rollback()
+                return replay
+            incident = await uow.incidents.get(incident_id, for_update=True)
+            if incident is None:
+                return await self._complete_error(uow, reservation, ResourceNotFoundError())
+            if incident.version != expected_incident_version:
+                return await self._complete_error(
+                    uow,
+                    reservation,
+                    VersionConflictError(details={"current_version": incident.version}),
+                )
+            if incident.status not in (
+                IncidentStatus.OPEN.value,
+                IncidentStatus.INVESTIGATING.value,
+            ):
+                return await self._complete_error(uow, reservation, InvalidActionParametersError())
+            job, created = await uow.jobs.attach_failed_fixture(incident_id=incident_id)
+            if created:
+                updated = await uow.incidents.conditional_update(
+                    incident_id=incident_id, expected_version=incident.version, values={}
+                )
+                if updated is None:
+                    raise RuntimeError("locked fixture incident changed")
+                await uow.events.append(
+                    incident_id=incident_id,
+                    event_type="demo_job.attached",
+                    principal=principal,
+                    request_id=request_id,
+                    payload={"job_id": str(job.id), "incident_version": updated.version},
+                )
+                await self._observer.reached("demo_job.attach.after_event")
+            body = job_body(job)
+            status = 201 if created else 200
+            await uow.idempotency.complete(
+                record_id=reservation.record_id,
+                response_status=status,
+                response_body=body,
+                resource_type="demo_job",
+                resource_id=job.id,
+            )
+            await uow.commit()
+            return CommandResult(status_code=status, body=body)
 
     async def simulate_job_failure(
         self,
@@ -586,6 +737,9 @@ class ActionCommandService:
         request_id: UUID,
     ) -> CommandResult:
         require_actor_type(principal, ActorType.HUMAN)
+        require_scope(principal, "fixtures:write")
+        if not self._demo_enabled:
+            raise ResourceNotFoundError()
         fingerprint = canonical_request_fingerprint(
             operation="demo_jobs.simulate_failure",
             path_parameters={"job_id": job_id},

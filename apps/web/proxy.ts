@@ -41,7 +41,7 @@ function applySecurityHeaders(
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set(
     "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=()",
+    "camera=(), microphone=(), geolocation=(), tools=(self)",
   );
   response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
   if (process.env.NODE_ENV === "production") {
@@ -83,24 +83,26 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
   const session = await auth0.getSession(request);
   if (!session) {
-    const response = request.nextUrl.pathname.startsWith("/api/ui/")
-      ? NextResponse.json(
-          {
-            error: {
-              code: "authentication_required",
-              message: "Sign in to continue.",
+    const response =
+      request.nextUrl.pathname.startsWith("/api/ui/") ||
+      request.nextUrl.pathname.startsWith("/api/agent-tools/")
+        ? NextResponse.json(
+            {
+              error: {
+                code: "authentication_required",
+                message: "Sign in to continue.",
+              },
             },
-          },
-          { status: 401 },
-        )
-      : NextResponse.redirect(
-          new URL(
-            `/auth/login?returnTo=${encodeURIComponent(
-              `${request.nextUrl.pathname}${request.nextUrl.search}`,
-            )}`,
-            request.url,
-          ),
-        );
+            { status: 401 },
+          )
+        : NextResponse.redirect(
+            new URL(
+              `/auth/login?returnTo=${encodeURIComponent(
+                `${request.nextUrl.pathname}${request.nextUrl.search}`,
+              )}`,
+              request.url,
+            ),
+          );
     return applySecurityHeaders(response, contentSecurityPolicy);
   }
 

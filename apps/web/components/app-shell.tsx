@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { WebMcpBridge } from "@/components/webmcp-bridge";
 
 const navigation = [
   { href: "/incidents", label: "Incidents", icon: "M3 12h4l3-8 4 16 3-8h4" },
@@ -104,6 +105,7 @@ export function AppShell({
         </nav>
       </header>
       <main id="main-content" tabIndex={-1}>
+        <WebMcpBridge />
         {children}
       </main>
     </div>

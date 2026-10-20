@@ -1,0 +1,182 @@
+[
+  {
+    "id": "a1100000-0000-4000-8000-000000000001",
+    "title": "Checkout queue retry restored a failed job",
+    "description": "A synthetic checkout worker timed out while processing an app-owned job. The queue had no sustained backlog.",
+    "service": "checkout",
+    "severity": "low",
+    "status": "resolved",
+    "resolution_summary": "A single allowlisted retry succeeded after reviewing the transient failure.",
+    "resolution_steps": [
+      "Inspect the failed job and current incident version.",
+      "Request the app-owned retry through the action policy.",
+      "Verify the recorded result and watch for repeated failure."
+    ],
+    "provenance": "seeded_demo_data"
+  },
+  {
+    "id": "a1100000-0000-4000-8000-000000000002",
+    "title": "Repeated checkout timeout needed operator review",
+    "description": "A synthetic checkout job failed after its first retry. The retry budget required human approval before another attempt.",
+    "service": "checkout",
+    "severity": "medium",
+    "status": "resolved",
+    "resolution_summary": "An operator reviewed the repeated error and approved a second bounded retry.",
+    "resolution_steps": [
+      "Inspect both failure events and the retry count.",
+      "Request a retry with the current incident version.",
+      "Wait for a human decision and inspect the applied result."
+    ],
+    "provenance": "seeded_demo_data"
+  },
+  {
+    "id": "a1100000-0000-4000-8000-000000000003",
+    "title": "Checkout latency rose during dependency degradation",
+    "description": "A simulated payment dependency slowed checkout requests and increased queue wait time.",
+    "service": "checkout",
+    "severity": "high",
+    "status": "resolved",
+    "resolution_summary": "The operator restored the simulated dependency and confirmed checkout latency recovered.",
+    "resolution_steps": [
+      "Compare queue delay with dependency health.",
+      "Escalate the dependency issue to the responsible operator.",
+      "Verify sustained recovery before proposing incident resolution."
+    ],
+    "provenance": "seeded_demo_data"
+  },
+  {
+    "id": "a1100000-0000-4000-8000-000000000004",
+    "title": "Payment gateway outage stopped authorization",
+    "description": "Synthetic payment authorizations failed across regions after a gateway configuration exercise.",
+    "service": "payments",
+    "severity": "critical",
+    "status": "resolved",
+    "resolution_summary": "An incident commander coordinated a reviewed rollback and verified authorization recovery.",
+    "resolution_steps": [
+      "Preserve diagnostic evidence and notify the incident commander.",
+      "Have an authorized operator review the gateway configuration.",
+      "Confirm synthetic authorization probes recover before requesting resolution."
+    ],
+    "provenance": "seeded_demo_data"
+  },
+  {
+    "id": "a1100000-0000-4000-8000-000000000005",
+    "title": "Duplicate payment callback delayed reconciliation",
+    "description": "A synthetic callback arrived twice and reconciliation flagged a duplicate reference.",
+    "service": "payments",
+    "severity": "medium",
+    "status": "resolved",
+    "resolution_summary": "The operator confirmed idempotent processing and replayed the approved reconciliation fixture.",
+    "resolution_steps": [
+      "Compare callback identifiers and ledger state.",
+      "Confirm that duplicate delivery did not create a second payment.",
+      "Ask the operator to review reconciliation and verify its result."
+    ],
+    "provenance": "seeded_demo_data"
+  },
+  {
+    "id": "a1100000-0000-4000-8000-000000000006",
+    "title": "Database connection pool exhausted",
+    "description": "Synthetic traffic exhausted available database connections and raised request latency.",
+    "service": "database",
+    "severity": "high",
+    "status": "resolved",
+    "resolution_summary": "An operator identified a held connection in the exercise and restored pool capacity.",
+    "resolution_steps": [
+      "Inspect pool utilization and waiting requests.",
+      "Ask the database operator to review long-running work.",
+      "Verify connection pressure and application latency return to baseline."
+    ],
+    "provenance": "seeded_demo_data"
+  },
+  {
+    "id": "a1100000-0000-4000-8000-000000000007",
+    "title": "Database disk pressure blocked writes",
+    "description": "A synthetic storage-capacity exercise filled a database volume and caused write failures.",
+    "service": "database",
+    "severity": "critical",
+    "status": "resolved",
+    "resolution_summary": "An authorized operator restored storage capacity and verified transactional writes.",
+    "resolution_steps": [
+      "Capture storage pressure and write failure evidence.",
+      "Escalate to the database incident commander.",
+      "Have an authorized operator restore capacity and verify write integrity."
+    ],
+    "provenance": "seeded_demo_data"
+  },
+  {
+    "id": "a1100000-0000-4000-8000-000000000008",
+    "title": "Notification delivery fixture timed out once",
+    "description": "A synthetic notification job hit a transient timeout without repeated delivery failure.",
+    "service": "notifications",
+    "severity": "low",
+    "status": "resolved",
+    "resolution_summary": "One policy-approved retry delivered the fixture successfully.",
+    "resolution_steps": [
+      "Inspect the delivery fixture and failure timestamp.",
+      "Request the allowlisted retry if current policy permits it.",
+      "Verify one recorded delivery and no duplicate notification."
+    ],
+    "provenance": "seeded_demo_data"
+  },
+  {
+    "id": "a1100000-0000-4000-8000-000000000009",
+    "title": "Notification backlog followed provider throttling",
+    "description": "A simulated provider throttled outbound messages and increased queue age.",
+    "service": "notifications",
+    "severity": "medium",
+    "status": "resolved",
+    "resolution_summary": "The operator reduced the exercise load and observed backlog recovery.",
+    "resolution_steps": [
+      "Compare throttle events with queue age.",
+      "Ask the operator to review the synthetic sending rate.",
+      "Observe backlog drain before proposing resolution."
+    ],
+    "provenance": "seeded_demo_data"
+  },
+  {
+    "id": "a1100000-0000-4000-8000-000000000010",
+    "title": "Search index lag followed a stalled import",
+    "description": "A synthetic catalog import stalled and search results missed recently added records.",
+    "service": "search",
+    "severity": "high",
+    "status": "resolved",
+    "resolution_summary": "The search operator recovered the simulated import and verified representative queries.",
+    "resolution_steps": [
+      "Compare source record IDs with indexed record IDs.",
+      "Escalate the stalled import for an operator decision.",
+      "Validate representative search results after recovery."
+    ],
+    "provenance": "seeded_demo_data"
+  },
+  {
+    "id": "a1100000-0000-4000-8000-000000000011",
+    "title": "Search fixture retry recovered a transient import error",
+    "description": "One app-owned search import fixture failed transiently with no broader index lag.",
+    "service": "search",
+    "severity": "low",
+    "status": "resolved",
+    "resolution_summary": "A bounded retry restored the fixture and the sampled record became searchable.",
+    "resolution_steps": [
+      "Inspect the failed fixture and current retry count.",
+      "Request an allowlisted retry after checking policy.",
+      "Verify the import result and sampled source ID."
+    ],
+    "provenance": "seeded_demo_data"
+  },
+  {
+    "id": "a1100000-0000-4000-8000-000000000012",
+    "title": "Identity session validation rejected valid sign-ins",
+    "description": "A synthetic identity configuration exercise caused valid sessions to fail audience validation.",
+    "service": "identity",
+    "severity": "high",
+    "status": "resolved",
+    "resolution_summary": "The identity operator corrected the exercise configuration and verified sign-in recovery.",
+    "resolution_steps": [
+      "Record the generic validation error and affected service.",
+      "Ask the identity operator to review issuer and audience configuration.",
+      "Verify valid sessions succeed and invalid sessions remain denied."
+    ],
+    "provenance": "seeded_demo_data"
+  }
+]

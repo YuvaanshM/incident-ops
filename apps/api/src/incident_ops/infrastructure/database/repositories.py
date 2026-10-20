@@ -264,6 +264,18 @@ class SqlAlchemyActionRequestRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def get_for_request(
+        self, *, principal: Principal, idempotency_key: UUID
+    ) -> ActionRequestView | None:
+        model = await self._session.scalar(
+            select(ActionRequestModel).where(
+                ActionRequestModel.requested_by_type == principal.actor_type.value,
+                ActionRequestModel.requested_by_id == principal.subject,
+                ActionRequestModel.idempotency_key == idempotency_key,
+            )
+        )
+        return None if model is None else _action_view(model)
+
     async def add_action(
         self,
         *,
@@ -397,6 +409,36 @@ class SqlAlchemyActionRequestRepository:
 class SqlAlchemyDemoJobRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def attach_failed_fixture(self, *, incident_id: UUID) -> tuple[DemoJobView, bool]:
+        stable_key = "monitoring-remediation-demo"
+        model = await self._session.scalar(
+            insert(DemoJobModel)
+            .values(
+                incident_id=incident_id,
+                stable_key=stable_key,
+                name="Synthetic remediation demo job",
+                status="failed",
+                retry_count=0,
+                version=1,
+                last_error="Synthetic demo timeout.",
+            )
+            .on_conflict_do_nothing(
+                index_elements=[DemoJobModel.incident_id, DemoJobModel.stable_key]
+            )
+            .returning(DemoJobModel)
+        )
+        if model is not None:
+            return _job_view(model), True
+        model = await self._session.scalar(
+            select(DemoJobModel).where(
+                DemoJobModel.incident_id == incident_id,
+                DemoJobModel.stable_key == stable_key,
+            )
+        )
+        if model is None:
+            raise RuntimeError("existing fixture job is not visible")
+        return _job_view(model), False
 
     async def get(self, job_id: UUID, *, for_update: bool = False) -> DemoJobView | None:
         statement = select(DemoJobModel).where(DemoJobModel.id == job_id)
@@ -572,6 +614,12 @@ class SqlAlchemyEventRepository:
         payload: Mapping[str, object],
         action_request_id: UUID | None = None,
     ) -> IncidentEventModel:
+        event_payload = dict(payload)
+        if principal.delegated_by is not None:
+            event_payload["delegation"] = {
+                "human_subject": principal.delegated_by,
+                "credential_id": str(principal.credential_id),
+            }
         event = IncidentEventModel(
             incident_id=incident_id,
             action_request_id=action_request_id,
@@ -579,7 +627,7 @@ class SqlAlchemyEventRepository:
             actor_type=principal.actor_type.value,
             actor_id=principal.subject,
             request_id=request_id,
-            payload=dict(payload),
+            payload=event_payload,
         )
         self._session.add(event)
         await self._session.flush()

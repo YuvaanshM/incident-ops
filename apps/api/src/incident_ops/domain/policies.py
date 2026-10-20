@@ -7,10 +7,11 @@ from incident_ops.domain.enums import (
     ActionType,
     ActorType,
     IncidentSeverity,
+    IncidentStatus,
     PolicyDecision,
 )
 
-POLICY_VERSION = "2026-09-25.v2"
+POLICY_VERSION = "2026-10-08.v3"
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +22,7 @@ class ActionPolicyInput:
     parameters_valid: bool
     retry_count: int
     higher_monitoring_risk: bool = False
+    incident_status: IncidentStatus = IncidentStatus.OPEN
 
     def __post_init__(self) -> None:
         if self.retry_count < 0:
@@ -47,6 +49,7 @@ class EvaluatedPolicy:
                 "parameters_valid": self.facts.parameters_valid,
                 "retry_count": self.facts.retry_count,
                 "higher_monitoring_risk": self.facts.higher_monitoring_risk,
+                "incident_status": self.facts.incident_status.value,
             },
         }
 
@@ -71,6 +74,16 @@ def evaluate_action_policy(policy_input: ActionPolicyInput) -> EvaluatedPolicy:
             facts=policy_input,
         )
 
+    if policy_input.action_type is ActionType.RETRY_FAILED_JOB and policy_input.incident_status in (
+        IncidentStatus.RESOLVED,
+        IncidentStatus.CLOSED,
+    ):
+        return EvaluatedPolicy(
+            decision=PolicyDecision.REJECT,
+            reasons=("incident_not_active",),
+            facts=policy_input,
+        )
+
     first_eligible_retry = (
         policy_input.action_type is ActionType.RETRY_FAILED_JOB
         and policy_input.retry_count == 0
@@ -85,6 +98,10 @@ def evaluate_action_policy(policy_input: ActionPolicyInput) -> EvaluatedPolicy:
 
     return EvaluatedPolicy(
         decision=PolicyDecision.REQUIRE_APPROVAL,
-        reasons=("human_approval_required",),
+        reasons=(
+            ("higher_monitoring_risk", "human_approval_required")
+            if policy_input.higher_monitoring_risk
+            else ("human_approval_required",)
+        ),
         facts=policy_input,
     )

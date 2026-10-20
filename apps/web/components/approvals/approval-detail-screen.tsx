@@ -196,6 +196,14 @@ export function ApprovalDetailScreen({ actionId }: { actionId: string }) {
             <span>version {incident.version}</span>
           </div>
         </article>
+        {incident.monitoring_status ? (
+          <p>
+            Monitoring: {humanize(incident.monitoring_status.toLowerCase())}.
+            Source recovery does not approve this request or execute
+            remediation. Approval rechecks current evidence before applying the
+            action.
+          </p>
+        ) : null}
       </section>
 
       <div className="decision-grid">
@@ -312,6 +320,15 @@ export function ApprovalDetailScreen({ actionId }: { actionId: string }) {
           ) : null}
           {action.outcome_code ? (
             <p>Outcome: {humanize(action.outcome_code)}</p>
+          ) : null}
+          {action.status === "stale" ? (
+            <p>
+              The evidence changed before approval. Nothing was executed.{" "}
+              <Link href={`/incidents/${incident.id}`}>
+                Review the latest incident
+              </Link>{" "}
+              before submitting a new request.
+            </p>
           ) : null}
         </section>
       )}

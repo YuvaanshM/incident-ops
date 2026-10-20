@@ -10,17 +10,28 @@ foundation, the FastAPI product API, and the responsive human console. Incident
 commands, action policy, approvals, audit history, idempotency, concurrency
 control, the narrow demo retry executor, explicit conflict recovery, and hosted
 human authentication are implemented. The leased Slack outbox worker adds
-bounded retries, crash recovery, and delivery auditing. Retrieval and agent
-adapters remain in later phases.
+bounded retries, crash recovery, and delivery auditing. Seven WebMCP tools use
+short-lived agent credentials through server-side adapters. Phase 11A adds cited,
+read-only retrieval from twelve synthetic historical incidents, with exact cosine
+search and safe source links. Phase 11B adds optional bounded investigation with
+quoted evidence, recoverable run receipts and policy-checked action requests.
+It stays disabled pending its live synthetic evaluation and operator review.
 
 The roadmap was reordered on 2026-09-17. Phase 8 now has two separate
 creation paths: signed Slack issues-channel messages and signed generic
 monitoring alerts. Both are disabled until explicit source bindings and secrets
 are configured. See the [Slack intake runbook](docs/phase-8-slack-intake.md)
 and [generic alert runbook](docs/phase-8-generic-alerts.md). A monitoring
-recovery is evidence, not human incident resolution. Phase 9 exercises the
-controlled remediation workflow, Phase 10 adds WebMCP, and Phase 11 covers
-retrieval/optional AI investigation. Existing phase-named runbooks retain
+recovery is evidence, not human incident resolution. Phase 9 now revalidates
+remediation against current monitoring evidence, enforces action authorization
+in application services, and provides explicit development job attachment. See
+the [controlled remediation walkthrough](docs/phase-9-remediation.md).
+The [WebMCP guide](docs/webmcp.md) covers Phase 10's trust boundaries, configuration,
+native browser requirements and deterministic acceptance demo. The
+[retrieval runbook](docs/phase-11a-retrieval.md) explains offline setup, the optional
+OpenAI embedding adapter, provenance and model changes. The
+[investigation runbook](docs/phase-11b-investigation.md) covers limits, cancellation,
+recovery and the separate live model evaluation/setup gate. Existing phase-named runbooks retain
 their historical filenames.
 
 ## V1 boundaries
@@ -43,7 +54,7 @@ Browser -> Next.js adapter -> FastAPI command/query services -> PostgreSQL + pgv
 Database outbox worker -> Slack (only after the command transaction commits)
 ```
 
-Next.js and the later WebMCP integration are adapters. They never own business
+Next.js and WebMCP are adapters. They never own business
 rules or act as security boundaries. FastAPI application/domain services own
 authorization, validation, policy, state transitions, idempotency, concurrency,
 and audit behavior. PostgreSQL is authoritative.
@@ -112,6 +123,7 @@ in the ignored `.env`, then use the public fixture credential `human-demo` or
 | `make typecheck`           | Run mypy and TypeScript checks                                              |
 | `make test`                | Run backend and frontend unit/API tests                                     |
 | `make test-integration`    | Run real PostgreSQL migration, constraint, RLS, concurrency, and seed tests |
+| `make test-agent`          | Run deterministic WebMCP acceptance with real FastAPI/PostgreSQL and a fake browser capability |
 | `make check`               | Run the complete local delivery gate, including PostgreSQL integration      |
 | `make seed`                | Add deterministic synthetic Phase 2 fixtures                                |
 | `make down`                | Stop local Compose services without deleting the volume                     |

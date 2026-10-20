@@ -450,3 +450,48 @@ test("monitor recovery is visible without resolving the incident", async ({
   ).toEqual([]);
   expect(errors).toEqual([]);
 });
+
+test("source recovery leaves approval pending and a stale result offers deliberate recovery", async ({
+  page,
+}) => {
+  await page.route(`**/api/ui/actions/${actionId}`, (route) =>
+    json(route, pendingAction),
+  );
+  await page.route(`**/api/ui/incidents/${incidentId}`, (route) =>
+    json(route, {
+      ...incident,
+      version: 3,
+      monitoring_status: "RESOLVED",
+    }),
+  );
+  let decisions = 0;
+  await page.route(`**/api/ui/actions/${actionId}/approve`, async (route) => {
+    decisions += 1;
+    expect(route.request().headers()["idempotency-key"]).toBeTruthy();
+    await json(route, {
+      ...pendingAction,
+      status: "stale",
+      outcome_code: "incident_version_changed",
+    });
+  });
+  await page.goto(`/approvals/${actionId}`);
+  await expect(
+    page.getByText(/Source recovery does not approve this request/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Approve request" }),
+  ).toBeVisible();
+  expect(decisions).toBe(0);
+  await page.getByRole("button", { name: "Approve request" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Stale", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/Nothing was executed/)).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Review the latest incident" }),
+  ).toHaveAttribute("href", `/incidents/${incidentId}`);
+  await expect(
+    page.getByRole("button", { name: "Approve request" }),
+  ).toHaveCount(0);
+  expect(decisions).toBe(1);
+});

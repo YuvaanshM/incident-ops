@@ -47,6 +47,7 @@ async def clean_database(database_engine: AsyncEngine) -> AsyncIterator[None]:
     truncate_statement = text(
         """
         TRUNCATE
+            investigation_runs,
             alert_events,
             alerts,
             outbox_events,
@@ -54,6 +55,7 @@ async def clean_database(database_engine: AsyncEngine) -> AsyncIterator[None]:
             incident_events,
             action_requests,
             demo_jobs,
+            historical_ingestion_events,
             historical_incidents,
             incidents
         RESTART IDENTITY

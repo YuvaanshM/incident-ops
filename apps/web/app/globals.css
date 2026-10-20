@@ -1970,3 +1970,32 @@ h3 {
     animation-iteration-count: 1 !important;
   }
 }
+
+.agent-result {
+  margin: 1rem 2rem;
+  padding: 1rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.75rem;
+}
+.agent-result p {
+  margin: 0.5rem 0;
+}
+.agent-result a,
+.agent-result button {
+  margin-right: 1rem;
+}
+
+.precedent-section > .button {
+  margin-block: 1rem;
+}
+.precedent-section ol {
+  padding-left: 1.5rem;
+}
+.precedent-section li + li {
+  margin-top: 0.5rem;
+}
+.source-reference {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.85rem;
+}

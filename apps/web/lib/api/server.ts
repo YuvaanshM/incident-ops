@@ -6,7 +6,7 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_MUTATION_BYTES = 24_000;
 
-function apiBaseUrl(): string {
+export function apiBaseUrl(): string {
   return (
     process.env.API_INTERNAL_URL ??
     process.env.API_PUBLIC_URL ??
@@ -14,7 +14,7 @@ function apiBaseUrl(): string {
   ).replace(/\/$/, "");
 }
 
-async function humanAccessToken(): Promise<
+export async function humanAccessToken(): Promise<
   { token: string } | { error: Response }
 > {
   const configured = process.env.INCIDENT_OPS_HUMAN_ACCESS_TOKEN?.trim();
@@ -40,11 +40,25 @@ async function humanAccessToken(): Promise<
   }
 }
 
-function jsonError(status: number, code: string, message: string): Response {
+export function jsonError(
+  status: number,
+  code: string,
+  message: string,
+): Response {
   return Response.json(
     { error: { code, message } },
     { status, headers: { "Cache-Control": "no-store" } },
   );
+}
+
+export function hasTrustedOrigin(request: Request): boolean {
+  try {
+    // Deployment configuration owns the public origin; forwarding headers do not.
+    const origin = new URL(process.env.APP_BASE_URL || request.url).origin;
+    return request.headers.get("Origin") === origin;
+  } catch {
+    return false;
+  }
 }
 
 function responseHeaders(response: Response): Headers {
@@ -65,8 +79,7 @@ function validMutationRequest(request: Request): Response | null {
       "The request origin could not be verified.",
     );
   }
-  const origin = request.headers.get("Origin");
-  if (!origin || origin !== new URL(request.url).origin) {
+  if (!hasTrustedOrigin(request)) {
     return jsonError(
       403,
       "csrf_rejected",
@@ -107,7 +120,8 @@ async function callApi(
       ...init,
       cache: "no-store",
       headers,
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(10_000)]),
+      redirect: "error",
     });
     return new Response(await response.arrayBuffer(), {
       status: response.status,
@@ -167,4 +181,64 @@ export async function forwardMutation(
 
 export function invalidIdentifier(): Response {
   return jsonError(404, "not_found", "The requested resource was not found.");
+}
+
+export async function forwardAdvisoryQuery(
+  request: Request,
+  apiPath: string,
+): Promise<Response> {
+  if (
+    !hasTrustedOrigin(request) ||
+    request.headers.get("X-Incident-Ops-Intent") !== "human-query"
+  )
+    return jsonError(
+      403,
+      "csrf_rejected",
+      "The request origin could not be verified.",
+    );
+  if (
+    request.headers.get("Content-Type")?.split(";")[0]?.trim() !==
+    "application/json"
+  )
+    return jsonError(
+      415,
+      "unsupported_media_type",
+      "A JSON request is required.",
+    );
+  const maxBytes = 12_000;
+  if (Number(request.headers.get("Content-Length")) > maxBytes)
+    return jsonError(413, "request_too_large", "The request is too large.");
+  const reader = request.body?.getReader();
+  if (!reader)
+    return jsonError(400, "invalid_json", "A JSON request is required.");
+  let body = "";
+  let size = 0;
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      size += chunk.value.byteLength;
+      if (size > maxBytes) {
+        await reader.cancel();
+        return jsonError(413, "request_too_large", "The request is too large.");
+      }
+      body += decoder.decode(chunk.value, { stream: true });
+    }
+    body += decoder.decode();
+    JSON.parse(body);
+  } catch {
+    return jsonError(
+      400,
+      "invalid_json",
+      "The request body must be valid JSON.",
+    );
+  } finally {
+    reader.releaseLock();
+  }
+  return callApi(request, apiPath, {
+    method: "POST",
+    body,
+    headers: { "Content-Type": "application/json" },
+  });
 }

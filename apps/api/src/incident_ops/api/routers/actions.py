@@ -13,6 +13,7 @@ from incident_ops.api.schemas.actions import (
     ActionReject,
     ActionRequestCreate,
     ActionResponse,
+    DemoJobAttach,
 )
 from incident_ops.api.schemas.incidents import DemoJobResponse
 from incident_ops.application.auth import Principal
@@ -95,6 +96,19 @@ async def list_actions(
     return serialize_action_page(page)
 
 
+@router.get("/actions/by-request/{idempotency_key}", response_model=ActionResponse)
+async def get_requested_action(
+    idempotency_key: UUID,
+    request: Request,
+    principal: RequestPrincipal,
+) -> dict[str, object]:
+    await enforce_rate_limit(request, principal, bucket="action_queries")
+    action = await _query_service(request).get_requested_action(
+        principal=principal, idempotency_key=idempotency_key
+    )
+    return action_body(action)
+
+
 @router.get("/actions/{action_id}", response_model=ActionResponse)
 async def get_action(
     action_id: UUID,
@@ -138,6 +152,29 @@ async def reject_action(
         idempotency_key=idempotency_key,
         request_id=request_id(request),
         reason=payload.reason,
+    )
+    return JSONResponse(status_code=result.status_code, content=result.body)
+
+
+@demo_router.post(
+    "/incidents/{incident_id}/job",
+    response_model=DemoJobResponse,
+    status_code=201,
+)
+async def attach_demo_job(
+    incident_id: UUID,
+    payload: DemoJobAttach,
+    request: Request,
+    principal: FixturePrincipal,
+    idempotency_key: IdempotencyKey,
+) -> JSONResponse:
+    await enforce_rate_limit(request, principal, bucket="demo_commands")
+    result = await _command_service(request).attach_demo_job(
+        principal=principal,
+        incident_id=incident_id,
+        expected_incident_version=payload.expected_incident_version,
+        idempotency_key=idempotency_key,
+        request_id=request_id(request),
     )
     return JSONResponse(status_code=result.status_code, content=result.body)
 

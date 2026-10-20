@@ -143,6 +143,10 @@ class IncidentRepository(Protocol):
 
 
 class ActionRequestRepository(Protocol):
+    async def get_for_request(
+        self, *, principal: Principal, idempotency_key: UUID
+    ) -> ActionRequestView | None: ...
+
     async def add_action(
         self,
         *,
@@ -192,6 +196,8 @@ class ActionRequestRepository(Protocol):
 
 
 class DemoJobRepository(Protocol):
+    async def attach_failed_fixture(self, *, incident_id: UUID) -> tuple[DemoJobView, bool]: ...
+
     async def get(self, job_id: UUID, *, for_update: bool = False) -> DemoJobView | None: ...
 
     async def queue_failed(

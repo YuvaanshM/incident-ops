@@ -125,3 +125,15 @@ class IngestionUnavailableError(IncidentOpsError):
     code = "ingestion_unavailable"
     public_message = "Intake is temporarily unavailable. Retry later."
     status_code = 503
+
+
+class RetrievalUnavailableError(IncidentOpsError):
+    code = "retrieval_unavailable"
+    public_message = "Historical retrieval is unavailable. Try again later."
+    status_code = 503
+
+
+class InvestigationUnavailableError(IncidentOpsError):
+    code = "investigation_unavailable"
+    public_message = "Optional investigation is unavailable. Manual controls remain available."
+    status_code = 503

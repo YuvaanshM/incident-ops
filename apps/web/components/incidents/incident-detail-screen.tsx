@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { HistoricalPrecedent } from "./historical-precedent";
+import { InvestigationPanel } from "./investigation-panel";
 import { useEffect, useState } from "react";
 
 import {
@@ -473,6 +475,15 @@ export function IncidentDetailScreen({
           {announcement}
         </p>
       ) : null}
+
+      <HistoricalPrecedent
+        incidentId={incident.id}
+        incidentVersion={incident.version}
+      />
+      <InvestigationPanel
+        incidentId={incident.id}
+        incidentVersion={incident.version}
+      />
 
       <div className="detail-grid">
         <section aria-labelledby="jobs-heading" className="ledger-section">

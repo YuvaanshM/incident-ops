@@ -90,3 +90,16 @@ jobs:
       - run: uv python install 3.14
       - run: uv sync --project apps/api --all-groups --locked
       - run: uv run --project apps/api pytest apps/api/tests/integration
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable
+      - run: corepack install
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @incident-ops/web exec playwright install --with-deps chromium
+      - name: Generated API contract drift
+        run: make api-client-check
+      - name: Human browser regression
+        run: pnpm --filter @incident-ops/web test:e2e --workers=1
+      - name: Deterministic agent acceptance against PostgreSQL
+        run: pnpm --filter @incident-ops/web exec playwright test --config playwright.agent.config.ts

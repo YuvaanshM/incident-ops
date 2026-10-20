@@ -2,7 +2,7 @@
 
 ## Trust boundaries
 
-The browser, future WebMCP tools, request bodies/headers, retrieved incident text,
+The browser, WebMCP tools, request bodies/headers, retrieved incident text,
 Slack, OIDC providers, and embedding providers are outside the core trust
 boundary. FastAPI verifies identity and permissions and validates every value.
 PostgreSQL is authoritative; UI state and tool annotations are never authority.
@@ -17,6 +17,15 @@ incident, critically escalate it, administer tokens, or execute generic commands
 
 Actor type and ID come only from a verified credential. Every protected FastAPI
 route checks both scope and actor type. The browser cannot elevate permissions.
+
+Phase 10 exchanges a verified human credential for a five-minute agent JWT with
+exactly `incidents:read actions:request`. The dedicated issuer, audience and signing
+key are server settings; callers cannot select claims. Next.js holds the credential
+only in server memory and forwards a fixed tool route. Agent command audit events
+carry the delegating human and credential ID, and stable subjects retain rate and
+idempotency identity across token refresh. The stateless authentication exchange
+does not persist tokens or domain mutations. See the [WebMCP threat model](webmcp.md)
+for cancellation/recovery, browser compatibility and setup.
 
 ## Database and SQL
 
@@ -109,3 +118,39 @@ service, source, severity, and server-built link. Keep plain-text rendering and
 mention suppression; descriptions/raw provider payloads stay out of Slack.
 Signatures, keys, original bodies, and sensitive headers never enter logs. Later
 provider or Slack-channel adapters must use this same application boundary.
+
+## Cited history (Phase 11A)
+
+Retrieval is an authorized read for human/agent principals with `incidents:read`.
+Only the application adds the internal `retrieval:read` database scope. Returned
+source prose and steps are untrusted text with stable UUID/version citations;
+there is no answer generation or automatic control flow from retrieved content.
+The browser renders plain strings and fixed internal source links. Tight
+principal-based query limits protect the embedding dependency, which is disabled
+by default and requires explicit external-data configuration for OpenAI.
+
+A separate fixed maintenance principal can publish synthetic history, with forced
+RLS policies restricted to `system:historical-fixture-loader`. Version checks,
+content fingerprints and an advisory transaction lock protect corpus changes.
+History, append-only ingestion audit and the principal-scoped idempotency receipt
+commit together; no notification is emitted. Provider calls run before writes
+and outside the transaction. See [the retrieval runbook](phase-11a-retrieval.md)
+for bounded inputs/outputs, model-space checks, failure behavior and setup.
+
+## Optional investigation (Phase 11B)
+
+The disabled-by-default harness uses a dedicated generation port and verified
+delegated agent identity. Every step checks the original token and incident
+version. Fixed tools, one-use observations, deadlines and reserved token/cost
+ceilings constrain the loop. Cited findings must be exact substrings of evidence
+actually observed. This proves attribution only; source text remains untrusted.
+
+Action opt-in permits at most one request through the existing policy service;
+no model output can supply actor/scopes or bypass human authority. Run receipt,
+idempotency and start audit commit together; terminal outcome/audit use an
+optimistic run version. Forced RLS restricts reads and internal writes to the
+owner. No raw prompts, provider payloads, reasoning or credentials enter traces.
+Cancellation does not undo a committed action; fixed keys enable recovery.
+See [ADR 0007](adr/0007-bounded-investigation.md) and the
+[setup/evaluation runbook](phase-11b-investigation.md). Production enablement
+is rejected until a separate data-processing and rollout decision is implemented.

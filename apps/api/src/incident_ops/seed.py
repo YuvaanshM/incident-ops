@@ -2,20 +2,27 @@
 
 import argparse
 import asyncio
+import json
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from incident_ops.application.retrieval import HistoricalRecord
+from incident_ops.application.services.retrieval import LOADER, HistoricalIngestionService
 from incident_ops.config import Settings, get_settings
+from incident_ops.domain.enums import ActionType, ActorType, IncidentSeverity
+from incident_ops.domain.policies import ActionPolicyInput, evaluate_action_policy
 from incident_ops.infrastructure.database.models import (
     ActionRequestModel,
     DemoJobModel,
     IncidentModel,
 )
 from incident_ops.infrastructure.database.session import create_database_engine
+from incident_ops.infrastructure.embeddings import build_embedder
 
 INCIDENT_IDS = (
     UUID("10000000-0000-4000-8000-000000000001"),
@@ -37,6 +44,15 @@ async def seed_database(engine: AsyncEngine, *, reset: bool) -> None:
     """Add stable synthetic fixtures; optionally remove only fixture-owned rows first."""
 
     decided_at = datetime(2026, 9, 5, 12, 0, tzinfo=UTC)
+    pending_policy = evaluate_action_policy(
+        ActionPolicyInput(
+            action_type=ActionType.REQUEST_STATUS_UPDATE,
+            incident_severity=IncidentSeverity.MEDIUM,
+            requested_by=ActorType.AGENT,
+            parameters_valid=True,
+            retry_count=0,
+        )
+    )
     async with engine.begin() as connection:
         if reset:
             await connection.execute(
@@ -129,8 +145,8 @@ async def seed_database(engine: AsyncEngine, *, reset: bool) -> None:
                 "request_fingerprint": "a" * 64,
                 "base_incident_version": 1,
                 "parameters": {"target_status": "investigating"},
-                "policy_version": "2026-09-05.v1",
-                "policy_snapshot": {"decision": "require_approval"},
+                "policy_version": pending_policy.policy_version,
+                "policy_snapshot": pending_policy.snapshot,
             },
             {
                 "id": ACTION_IDS[1],
@@ -181,8 +197,27 @@ async def seed_database(engine: AsyncEngine, *, reset: bool) -> None:
             )
 
 
+def load_historical_fixtures() -> list[HistoricalRecord]:
+    path = Path(__file__).resolve().parents[4] / "fixtures/historical-incidents/incidents.json"
+    records = [HistoricalRecord.model_validate(item) for item in json.loads(path.read_text())]
+    if not 10 <= len(records) <= 20 or len({record.id for record in records}) != len(records):
+        raise ValueError("curated history must contain ten to twenty distinct sources")
+    return records
+
+
+async def seed_historical(settings: Settings) -> dict[str, object]:
+    engine = create_database_engine(settings.database_url)
+    try:
+        return await HistoricalIngestionService(engine, build_embedder(settings)).ingest(
+            principal=LOADER, records=load_historical_fixtures()
+        )
+    finally:
+        await engine.dispose()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Load deterministic Incident Ops fixtures")
+    parser.add_argument("corpus", nargs="?", choices=["historical"])
     parser.add_argument(
         "--reset",
         action="store_true",
@@ -210,6 +245,12 @@ async def _run(reset: bool) -> None:
 
 def main() -> None:
     args = build_parser().parse_args()
+    if args.corpus == "historical":
+        if args.reset:
+            raise SystemExit("Historical ingestion is versioned and does not support reset")
+        result = asyncio.run(seed_historical(get_settings()))
+        print(json.dumps(result, sort_keys=True))
+        return
     asyncio.run(_run(args.reset))
     mode = "reset then additive" if args.reset else "additive"
     print(f"Fixture mode: {mode}. Phase 2 synthetic records loaded.")
